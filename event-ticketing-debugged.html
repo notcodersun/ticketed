@@ -468,9 +468,9 @@ const PAGE_PARAMS = new URLSearchParams(location.search);
 const ADMIN_MODE = PAGE_PARAMS.get('admin') === '1';
 
 /* ============ Test mode — isolates test submissions from real capacity/sales ============
-   Add ?test=1 to the page URL when rehearsing approvals/check-ins. The published page
-   defaults to live mode so real submissions count toward real capacity. */
-const TEST_MODE = PAGE_PARAMS.get('test') === '1';
+   Add ?test=1 when rehearsing locally. Public deployments always use live mode. */
+const LOCAL_TEST_ALLOWED = ['localhost', '127.0.0.1', ''].includes(location.hostname) || location.protocol === 'file:';
+const TEST_MODE = LOCAL_TEST_ALLOWED && PAGE_PARAMS.get('test') === '1';
 const TICKET_PREFIX = TEST_MODE ? 'test-ticket:' : 'ticket:';
 const REQUEST_PREFIX = TEST_MODE ? 'test-request:' : 'request:';
 if (TEST_MODE) {
