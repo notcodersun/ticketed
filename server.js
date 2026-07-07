@@ -122,12 +122,17 @@ function escapeHtml(value) {
 function rulesPlainText() {
   return [
     'DO:',
-    '- Bring this admission pass and a valid ID.',
-    '- Arrive before doors open.',
-    '- Keep the QR visible at entry.',
+    '- Do scream every lyric like you personally wrote it.',
+    "- Do arrive by doors-open. Sound checks don't wait for your fit pic.",
+    '- Do hydrate — moshing dehydrates faster than your group chat drama.',
+    '- Do make a new friend in the pit. Trauma bonding is a love language.',
     '',
     "DON'T:",
-    "- Share this pass, duplicate the QR, or lose the ticket code."
+    '- Don\'t ask the bouncer for a "friends and family" rate. There isn\'t one.',
+    "- Don't crowd-surf if leg day was sometime in 2019.",
+    "- Don't film the entire set. You will never, ever watch it back.",
+    "- Don't lose this QR. We will not be emotionally available about it.",
+    '- Only rule is to not get caught.'
   ].join('\n');
 }
 
