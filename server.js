@@ -2,6 +2,7 @@ const http = require('http');
 const crypto = require('crypto');
 const fs = require('fs/promises');
 const path = require('path');
+const nodemailer = require('nodemailer');
 
 const PORT = Number(process.env.PORT || 8000);
 const ROOT = __dirname;
@@ -10,6 +11,14 @@ const DATA_FILE = path.join(DATA_DIR, 'storage.json');
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || process.env.ADMIN_PIN || '2026';
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const SESSION_COOKIE = 'ticketed_admin';
+const EMAIL_TEMPLATE_FILE = path.join(ROOT, 'emailjs-ticket-template.html');
+const SERVER_EVENT = {
+  name: 'M.U.M',
+  dateTime: 'Sunday, 26 July 2026 · 3:00 PM',
+  venueName: 'Biswas Enclave, Kasba, Kolkata',
+  venueMapLink: 'https://maps.app.goo.gl/c61Jdtr5MVm3JkU97',
+  price: 199.69
+};
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -24,6 +33,7 @@ const MIME_TYPES = {
 };
 
 let writeQueue = Promise.resolve();
+let mailTransport = null;
 
 async function ensureDataFile() {
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -60,6 +70,128 @@ function sendJson(res, status, data) {
 
 function sendError(res, status, message) {
   sendJson(res, status, { error: message });
+}
+
+function formatEmailMoney(amount) {
+  return 'INR ' + Number(amount).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function eventDateParts() {
+  const parts = SERVER_EVENT.dateTime.split('·').map((part) => part.trim());
+  return { eventDate: parts[0] || SERVER_EVENT.dateTime, doors: parts[1] || '' };
+}
+
+function buildQrImageUrl(text, size = 220) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function rulesPlainText() {
+  return [
+    'DO:',
+    '- Bring this admission pass and a valid ID.',
+    '- Arrive before doors open.',
+    '- Keep the QR visible at entry.',
+    '',
+    "DON'T:",
+    "- Share this pass, duplicate the QR, or lose the ticket code."
+  ].join('\n');
+}
+
+function templateParamsForTicket(ticket) {
+  const { eventDate, doors } = eventDateParts();
+  const ticketIndex = ticket.ticketIndex || 1;
+  const ticketTotal = ticket.ticketTotal || 1;
+  const qrImage = buildQrImageUrl(ticket.id, 220);
+  const recipientEmail = String(ticket.email || '').trim();
+  return {
+    to_email: recipientEmail,
+    email: recipientEmail,
+    user_email: recipientEmail,
+    recipient_email: recipientEmail,
+    reply_to: recipientEmail,
+    to_name: ticket.name || '',
+    name: ticket.name || '',
+    event_name: SERVER_EVENT.name,
+    event_datetime: SERVER_EVENT.dateTime,
+    event_date: eventDate,
+    event_doors: doors,
+    venue_name: SERVER_EVENT.venueName,
+    venue_link: SERVER_EVENT.venueMapLink,
+    ticket_code: ticket.id,
+    ticket_index: ticketIndex,
+    ticket_total: ticketTotal,
+    ticket_label: `${ticketIndex} of ${ticketTotal}`,
+    ticket_price: formatEmailMoney(SERVER_EVENT.price),
+    qr_image: qrImage,
+    qr_url: qrImage,
+    rules_text: rulesPlainText()
+  };
+}
+
+async function renderEmailHtml(ticket) {
+  const template = await fs.readFile(EMAIL_TEMPLATE_FILE, 'utf8');
+  const params = templateParamsForTicket(ticket);
+  return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => escapeHtml(params[key] || ''));
+}
+
+function smtpConfigured() {
+  return Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM);
+}
+
+function getMailTransport() {
+  if (mailTransport) return mailTransport;
+  mailTransport = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+    auth: process.env.SMTP_USER ? {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS || ''
+    } : undefined
+  });
+  return mailTransport;
+}
+
+async function sendTicketEmailWithNodemailer(ticket) {
+  const recipientEmail = String(ticket.email || '').trim();
+  if (!recipientEmail) {
+    return { sent: false, error: 'This ticket has no email address on file.' };
+  }
+  if (!smtpConfigured()) {
+    return {
+      skipped: true,
+      reason: 'Nodemailer is wired, but SMTP is not configured. Set SMTP_HOST and SMTP_FROM, plus SMTP_USER/SMTP_PASS if needed.'
+    };
+  }
+  const html = await renderEmailHtml(ticket);
+  const info = await getMailTransport().sendMail({
+    from: process.env.SMTP_FROM,
+    to: recipientEmail,
+    subject: `Your ticket for ${SERVER_EVENT.name}`,
+    html,
+    text: [
+      `Hi ${ticket.name || 'there'},`,
+      '',
+      `Here is your admission pass for ${SERVER_EVENT.name}.`,
+      `${SERVER_EVENT.dateTime} · ${SERVER_EVENT.venueName}`,
+      `Ticket code: ${ticket.id}`,
+      '',
+      rulesPlainText()
+    ].join('\n')
+  });
+  return { sent: true, provider: 'nodemailer', messageId: info.messageId };
 }
 
 function cookieOptions(req, maxAge) {
@@ -199,6 +331,34 @@ async function handleAdmin(req, res, url) {
   if (url.pathname === '/api/admin/logout' && req.method === 'POST') {
     clearAdminCookie(req, res);
     sendJson(res, 200, { authenticated: false });
+    return;
+  }
+
+  if (url.pathname === '/api/admin/send-ticket-email' && req.method === 'POST') {
+    if (!isAdmin(req)) {
+      sendError(res, 401, 'Admin session required');
+      return;
+    }
+    const body = await readJsonBody(req);
+    const ticketPrefix = body.ticketPrefix === 'test-ticket:' ? 'test-ticket:' : 'ticket:';
+    const ticketId = String(body.ticketId || '').trim();
+    if (!/^[A-Z0-9]{20}$/.test(ticketId)) {
+      sendError(res, 400, 'Invalid ticket ID');
+      return;
+    }
+    const store = await readStore();
+    const value = store[ticketPrefix + ticketId];
+    if (!value) {
+      sendError(res, 404, 'Ticket not found');
+      return;
+    }
+    let ticket;
+    try { ticket = JSON.parse(value); } catch {
+      sendError(res, 500, 'Ticket record is corrupted');
+      return;
+    }
+    const result = await sendTicketEmailWithNodemailer(ticket);
+    sendJson(res, 200, result);
     return;
   }
 
@@ -421,5 +581,8 @@ server.listen(PORT, () => {
   console.log(`Ticketed server running on http://localhost:${PORT}`);
   if (!process.env.ADMIN_PASSWORD && !process.env.ADMIN_PIN) {
     console.warn('WARNING: using default admin password 2026. Set ADMIN_PASSWORD before sharing the public URL.');
+  }
+  if (!smtpConfigured()) {
+    console.warn('Email sending: Nodemailer enabled but SMTP is not configured. Set SMTP_HOST and SMTP_FROM to send real emails.');
   }
 });

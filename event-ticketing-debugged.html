@@ -1035,8 +1035,21 @@ function buildQrImageUrl(text, size = 220){
   return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}`;
 }
 
-/* ============ Email a single ticket via EmailJS ============ */
 async function sendTicketEmail(ticket){
+  try{
+    const result = await appApi('/api/admin/send-ticket-email', {
+      method: 'POST',
+      body: JSON.stringify({ ticketId: ticket.id, ticketPrefix: TICKET_PREFIX })
+    });
+    return result;
+  }catch(e){
+    console.warn('Backend email send failed; falling back to EmailJS.', e);
+    return sendTicketEmailViaEmailJs(ticket);
+  }
+}
+
+/* ============ EmailJS fallback (kept as backup while testing Nodemailer) ============ */
+async function sendTicketEmailViaEmailJs(ticket){
   if(!emailjsReady()){
     return { skipped:true, reason:'EmailJS is not configured (check EMAILJS_CONFIG at the top of the script).' };
   }

@@ -61,6 +61,25 @@ In EmailJS, open the ticket template, switch to the HTML/source editor, and past
 
 Set the template's recipient/to email field to `{{to_email}}`.
 
+## Server-Side Email With Nodemailer
+
+The app now tries the backend Nodemailer endpoint first and keeps EmailJS as a browser fallback.
+
+To send real emails from the server, start with SMTP settings:
+
+```sh
+ADMIN_PASSWORD="use-a-long-random-password" \
+SESSION_SECRET="another-long-random-string" \
+SMTP_HOST="smtp.example.com" \
+SMTP_PORT="587" \
+SMTP_USER="smtp-user" \
+SMTP_PASS="smtp-password" \
+SMTP_FROM="M.U.M Tickets <tickets@example.com>" \
+npm start
+```
+
+If `SMTP_HOST` and `SMTP_FROM` are not set, the admin email log will show that Nodemailer is wired but skipped. That is expected for local feasibility testing.
+
 ## Free Public URL With Cloudflare Quick Tunnel
 
 Keep the server running:
