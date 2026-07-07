@@ -133,8 +133,9 @@
   .ticket .perforation::before, .ticket .perforation::after{content:'';position:absolute;left:-9px;width:18px;height:18px;background:var(--paper-dark);border-radius:50%;}
   .ticket .perforation::before{top:-9px;}
   .ticket .perforation::after{bottom:-9px;}
-  .ticket .stub-qr{width:170px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 12px;gap:8px;}
+  .ticket .stub-qr{width:220px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 12px;gap:8px;}
   .stub-qr .qr-box{background:#fff;padding:8px;border-radius:8px;}
+  .stub-qr .qr-box img{display:block;width:180px;height:180px;}
   .stub-qr .hint{font-size:10px;color:var(--ink-soft);text-align:center;}
   .ticket .ticket-rules{border-top:2px dashed rgba(42,39,33,0.25);padding:16px 22px 20px;}
   .ticket .rules-title{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:10px;}
@@ -849,7 +850,10 @@ async function approveRequest(reqId){
 
   const newTickets = [];
   for(let i=0;i<qty;i++){
-    const ticketId = genId(20);
+    let ticketId = genId(20);
+    while(await getRecord(TICKET_PREFIX+ticketId)){
+      ticketId = genId(20);
+    }
     const ticket = {
       id:ticketId, name:request.name, email:request.email, phone:request.phone||'',
       upiref:request.upiref||'', purchasedAt:new Date().toISOString(), used:false, usedAt:null,
@@ -866,14 +870,8 @@ async function approveRequest(reqId){
 
   // Fire off ticket emails — approval isn't blocked on email delivery, but every
   // attempt (success or failure) is recorded in the visible Email delivery log.
-  if(emailjsReady()){
-    for(const ticket of newTickets){
-      sendTicketEmail(ticket).then(result=>logEmailAttempt(ticket, result));
-    }
-  } else {
-    for(const ticket of newTickets){
-      logEmailAttempt(ticket, { skipped:true, reason:'EmailJS is not configured yet — see EMAILJS_CONFIG at the top of the script.' });
-    }
+  for(const ticket of newTickets){
+    sendTicketEmail(ticket).then(result=>logEmailAttempt(ticket, result));
   }
 }
 
@@ -955,6 +953,7 @@ async function rejectRequest(reqId){
 function renderTicketStub(ticket, targetEl){
   const indexNote = ticket.ticketTotal && ticket.ticketTotal > 1
     ? `Ticket ${ticket.ticketIndex} of ${ticket.ticketTotal}` : null;
+  const qrImage = buildQrImageUrl(ticket.id, 220);
   targetEl.innerHTML = `
     <div class="ticket">
       <div class="ticket-row">
@@ -968,7 +967,9 @@ function renderTicketStub(ticket, targetEl){
         </div>
         <div class="perforation"></div>
         <div class="stub-qr">
-          <div class="qr-box" id="qr-box-${ticket.id}"></div>
+          <div class="qr-box" id="qr-box-${ticket.id}">
+            <img alt="Ticket QR code" src="${qrImage}" width="180" height="180">
+          </div>
           <div class="hint">Show this at entry</div>
           <button class="ghost" id="dl-${ticket.id}" style="margin-top:2px;">Download</button>
         </div>
@@ -987,20 +988,9 @@ function renderTicketStub(ticket, targetEl){
         </div>
       </div>
     </div>`;
-  if (window.QRCode) {
-    new QRCode(document.getElementById('qr-box-'+ticket.id), {
-      text: ticket.id, width:132, height:132, colorDark:'#2A2721', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.M
-    });
-  } else {
-    document.getElementById('qr-box-'+ticket.id).innerHTML = '<div class="empty-note">QR unavailable</div>';
-  }
   setTimeout(()=>{
     document.getElementById('dl-'+ticket.id).addEventListener('click', ()=>{
-      const box = document.getElementById('qr-box-'+ticket.id);
-      const canvas = box.querySelector('canvas'); const img = box.querySelector('img');
-      const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
-      if(!dataUrl) return;
-      const a = document.createElement('a'); a.href=dataUrl; a.download=`ticket-${ticket.id}.png`; a.click();
+      downloadTicketQr(ticket);
     });
   }, 50);
 }
@@ -1134,11 +1124,20 @@ function buildMailtoLink(ticket){
 }
 async function downloadTicketQr(ticket){
   try{
-    const dataUrl = await generateQrDataUrl(ticket.id);
+    const qrUrl = buildQrImageUrl(ticket.id, 220);
+    const response = await fetch(qrUrl);
+    if(!response.ok) throw new Error('QR image download failed');
+    const blob = await response.blob();
+    const dataUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = dataUrl; a.download = `ticket-${ticket.id}.png`; a.click();
+    setTimeout(()=>URL.revokeObjectURL(dataUrl), 1000);
   }catch(e){
-    alert('Could not generate the QR image: ' + e.message);
+    const a = document.createElement('a');
+    a.href = buildQrImageUrl(ticket.id, 220);
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.click();
   }
 }
 
