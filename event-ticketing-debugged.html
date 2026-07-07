@@ -81,6 +81,10 @@
     width:100%;padding:11px 12px;border:1px solid rgba(42,39,33,0.22);border-radius:8px;
     font-family:'IBM Plex Sans',sans-serif;font-size:14px;background:#fff;color:var(--ink);
   }
+  input[type=number]{
+    padding:6px 8px;border:1px solid rgba(42,39,33,0.22);border-radius:8px;
+    font-family:'IBM Plex Sans',sans-serif;font-size:14px;background:#fff;color:var(--ink);
+  }
   input:focus{outline:2px solid var(--teal);outline-offset:1px;}
   .checkbox-group{display:flex;flex-direction:column;gap:8px;margin-top:6px;}
   .checkbox-item{
@@ -324,6 +328,10 @@ const EVENT = {
   upiPhone: "+91 90641 50021",
   adminPin: "2026"
 };
+const formatMoney = (amount) => '₹' + Number(amount).toLocaleString('en-IN', {
+  minimumFractionDigits: Number.isInteger(Number(amount)) ? 0 : 2,
+  maximumFractionDigits: 2
+});
 
 /* ============ EmailJS — fill these in from your EmailJS account ============ */
 /* 1. Create a free account at emailjs.com
@@ -401,21 +409,19 @@ function rulesPlainText(){
 document.getElementById('brand-title').textContent = EVENT.name;
 
 /* ============ Test mode — isolates test submissions from real capacity/sales ============
-   Normally this checks for ?test=1 in the URL. It's temporarily forced to `true` below
-   so you can try it out right here in the artifact preview (which can't easily carry a
-   query string). Flip it back to the commented-out line before publishing for real use. */
-const TEST_MODE = true; // <-- MOCKED for testing. Swap with the line below before going live:
-// const TEST_MODE = new URLSearchParams(location.search).get('test') === '1';
+   Add ?test=1 to the page URL when rehearsing approvals/check-ins. The published page
+   defaults to live mode so real submissions count toward real capacity. */
+const TEST_MODE = new URLSearchParams(location.search).get('test') === '1';
 const TICKET_PREFIX = TEST_MODE ? 'test-ticket:' : 'ticket:';
 const REQUEST_PREFIX = TEST_MODE ? 'test-request:' : 'request:';
 if (TEST_MODE) {
   const banner = document.createElement('div');
-  banner.textContent = '🧪 TEST MODE — submissions here do not count toward real capacity or sales.';
+  banner.textContent = 'TEST MODE - submissions here do not count toward real capacity or sales.';
   banner.style.cssText = 'position:sticky;top:0;z-index:999;background:#8A6415;color:#F1E7CE;text-align:center;padding:8px 12px;font-family:IBM Plex Sans,sans-serif;font-size:12.5px;font-weight:600;';
   document.body.prepend(banner);
 }
 document.getElementById('brand-meta').textContent = `${EVENT.dateTime} · ${EVENT.venueName}`;
-document.getElementById('price-display').textContent = '₹' + EVENT.price;
+document.getElementById('price-display').textContent = formatMoney(EVENT.price);
 document.getElementById('venue-name-display').textContent = EVENT.venueName;
 const venueLinkEl = document.getElementById('venue-link');
 if(EVENT.venueMapLink){ venueLinkEl.href = EVENT.venueMapLink; venueLinkEl.style.display = 'inline'; }
@@ -427,7 +433,7 @@ document.getElementById('sold-out-msg').textContent = `All ${EVENT.maxGuests} sp
 let upiQrInstance = null;
 function renderUpiQr(qty){
   const amount = (EVENT.price * qty).toFixed(2);
-  document.getElementById('upi-total-display').textContent = '₹' + amount;
+  document.getElementById('upi-total-display').textContent = formatMoney(amount);
   document.getElementById('reg-qty-display').textContent = qty;
   const target = document.getElementById('upi-qr');
   target.innerHTML = '';
@@ -499,6 +505,12 @@ function genId(len){
   return s;
 }
 function escapeHtml(s){ const d=document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
+function isValidEmail(value){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+function isValidUpiRef(value){
+  return /^[A-Za-z0-9][A-Za-z0-9 -]{5,34}$/.test(value);
+}
 
 /* ============ Top-level nav ============ */
 document.querySelectorAll('nav.tabs > button').forEach(btn=>{
@@ -563,6 +575,8 @@ document.getElementById('submit-btn').addEventListener('click', async ()=>{
   const selectedBand = document.querySelector('.source-band:checked');
   const sourceBand = selectedBand ? selectedBand.value : null;
   if(!name || !email || !upiref){ alert('Please fill in your name, email, and UPI transaction reference.'); return; }
+  if(!isValidEmail(email)){ alert('Please enter a valid email address.'); return; }
+  if(!isValidUpiRef(upiref)){ alert('Please enter a valid UPI transaction/UTR reference.'); return; }
   if(!sourceBand){ alert('Please select how you heard about the event.'); return; }
 
   const btn = document.getElementById('submit-btn');
