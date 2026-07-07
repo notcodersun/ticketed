@@ -14,10 +14,17 @@ Open:
 http://localhost:8000
 ```
 
+Admin/staff view:
+
+```text
+http://localhost:8000/admin.html
+```
+
 Use test mode while rehearsing the flow:
 
 ```text
 http://localhost:8000/event-ticketing-debugged.html?test=1
+http://localhost:8000/admin.html?test=1
 ```
 
 Live mode is the normal URL without `?test=1`.
@@ -37,6 +44,7 @@ cloudflared tunnel --url http://localhost:8000
 ```
 
 Cloudflare prints a random public `https://...trycloudflare.com` URL. Share that URL with guests.
+Use `/admin.html` on the same public URL for staff.
 
 Important notes:
 
@@ -44,4 +52,3 @@ Important notes:
 - Quick Tunnel URLs are temporary and can change when restarted.
 - Ticket and request data is saved on this machine in `data/storage.json`.
 - This is still a lightweight trust-based app. The admin PIN hides the staff UI, but the API is not hardened against technical abuse.
-

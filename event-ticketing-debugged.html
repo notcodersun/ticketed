@@ -440,11 +440,13 @@ function rulesPlainText(){
 }
 
 document.getElementById('brand-title').textContent = EVENT.name;
+const PAGE_PARAMS = new URLSearchParams(location.search);
+const ADMIN_MODE = PAGE_PARAMS.get('admin') === '1';
 
 /* ============ Test mode — isolates test submissions from real capacity/sales ============
    Add ?test=1 to the page URL when rehearsing approvals/check-ins. The published page
    defaults to live mode so real submissions count toward real capacity. */
-const TEST_MODE = new URLSearchParams(location.search).get('test') === '1';
+const TEST_MODE = PAGE_PARAMS.get('test') === '1';
 const TICKET_PREFIX = TEST_MODE ? 'test-ticket:' : 'ticket:';
 const REQUEST_PREFIX = TEST_MODE ? 'test-request:' : 'request:';
 if (TEST_MODE) {
@@ -543,15 +545,28 @@ function isValidUpiRef(value){
 }
 
 /* ============ Top-level nav ============ */
+function setActiveView(viewName){
+  document.querySelectorAll('nav.tabs > button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  const button = document.querySelector(`nav.tabs > button[data-view="${viewName}"]`);
+  if(button) button.classList.add('active');
+  document.getElementById('view-'+viewName).classList.add('active');
+  if(viewName==='register') refreshCapacity();
+}
 document.querySelectorAll('nav.tabs > button').forEach(btn=>{
   btn.addEventListener('click', ()=>{
-    document.querySelectorAll('nav.tabs > button').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('view-'+btn.dataset.view).classList.add('active');
-    if(btn.dataset.view==='register') refreshCapacity();
+    setActiveView(btn.dataset.view);
   });
 });
+const topTabs = document.querySelector('nav.tabs');
+const adminTab = document.querySelector('nav.tabs > button[data-view="admin"]');
+if(!ADMIN_MODE){
+  if(adminTab) adminTab.style.display = 'none';
+  if(topTabs) topTabs.style.display = 'none';
+  document.getElementById('view-admin').setAttribute('aria-hidden', 'true');
+} else {
+  setActiveView('admin');
+}
 
 /* ============ Admin unlock + sub-nav ============ */
 let adminUnlocked = false;

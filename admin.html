@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ticketed Admin</title>
+</head>
+<body>
+<script>
+  const params = new URLSearchParams(location.search);
+  params.set('admin', '1');
+  location.replace('event-ticketing-debugged.html?' + params.toString());
+</script>
+<p><a href="event-ticketing-debugged.html?admin=1">Open admin</a></p>
+</body>
+</html>
