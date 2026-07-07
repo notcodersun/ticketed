@@ -47,6 +47,20 @@ ADMIN_PASSWORD="use-a-long-random-password" SESSION_SECRET="another-long-random-
 
 The admin password is checked by the server. Successful login creates an HttpOnly session cookie. Guest browsers can submit payment verification requests and check their own status, but raw storage listing, ticket creation, approvals, check-in updates, dashboards, and CSV export require the admin session.
 
+## EmailJS Ticket Template
+
+The styled EmailJS HTML body is in `emailjs-ticket-template.html`.
+
+In EmailJS, open the ticket template, switch to the HTML/source editor, and paste that file's contents as the message body. The app sends these fields:
+
+```text
+{{to_email}} {{to_name}} {{event_name}} {{event_datetime}} {{event_date}} {{event_doors}}
+{{venue_name}} {{venue_link}} {{ticket_code}} {{ticket_index}} {{ticket_total}} {{ticket_label}}
+{{ticket_price}} {{qr_image}} {{qr_url}} {{rules_text}}
+```
+
+Set the template's recipient/to email field to `{{to_email}}`.
+
 ## Free Public URL With Cloudflare Quick Tunnel
 
 Keep the server running:

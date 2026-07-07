@@ -331,6 +331,10 @@ const formatMoney = (amount) => '₹' + Number(amount).toLocaleString('en-IN', {
   minimumFractionDigits: Number.isInteger(Number(amount)) ? 0 : 2,
   maximumFractionDigits: 2
 });
+const formatEmailMoney = (amount) => 'INR ' + Number(amount).toLocaleString('en-IN', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 /* ============ EmailJS — fill these in from your EmailJS account ============ */
 /* 1. Create a free account at emailjs.com
@@ -452,6 +456,10 @@ const TICKET_RULES = {
 function rulesPlainText(){
   return "DO:\n" + TICKET_RULES.dos.map(d=>"- "+d).join("\n")
     + "\n\nDON'T:\n" + TICKET_RULES.donts.map(d=>"- "+d).join("\n");
+}
+function eventDateParts(){
+  const parts = EVENT.dateTime.split('·').map(part=>part.trim());
+  return { eventDate: parts[0] || EVENT.dateTime, doors: parts[1] || '' };
 }
 
 document.getElementById('brand-title').textContent = EVENT.name;
@@ -1023,6 +1031,9 @@ function generateQrDataUrl(text){
     }, 50);
   });
 }
+function buildQrImageUrl(text, size = 220){
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}`;
+}
 
 /* ============ Email a single ticket via EmailJS ============ */
 async function sendTicketEmail(ticket){
@@ -1033,12 +1044,11 @@ async function sendTicketEmail(ticket){
   if(!recipientEmail){
     return { sent:false, error:'This ticket has no email address on file.' };
   }
-  let qrImage;
-  try{
-    qrImage = await generateQrDataUrl(ticket.id);
-  }catch(e){
-    return { sent:false, error:'Could not render the QR code for the email: '+e.message };
-  }
+  const { eventDate, doors } = eventDateParts();
+  const ticketIndex = ticket.ticketIndex || 1;
+  const ticketTotal = ticket.ticketTotal || 1;
+  const ticketLabel = `${ticketIndex} of ${ticketTotal}`;
+  const qrImage = buildQrImageUrl(ticket.id, 220);
   const params = {
     to_email: recipientEmail,
     email: recipientEmail,
@@ -1049,12 +1059,17 @@ async function sendTicketEmail(ticket){
     name: ticket.name,
     event_name: EVENT.name,
     event_datetime: EVENT.dateTime,
+    event_date: eventDate,
+    event_doors: doors,
     venue_name: EVENT.venueName,
     venue_link: EVENT.venueMapLink || '',
     ticket_code: ticket.id,
-    ticket_index: ticket.ticketIndex || 1,
-    ticket_total: ticket.ticketTotal || 1,
+    ticket_index: ticketIndex,
+    ticket_total: ticketTotal,
+    ticket_label: ticketLabel,
+    ticket_price: formatEmailMoney(EVENT.price),
     qr_image: qrImage,
+    qr_url: qrImage,
     rules_text: rulesPlainText()
   };
   try{
