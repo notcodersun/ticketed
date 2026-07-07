@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Admission</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Metal+Mania&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+  :root{
+    --paper:#EDE6D3;
+    --paper-dark:#E1D8C0;
+    --ink:#2A2721;
+    --ink-soft:#5B564C;
+    --teal:#1D4E4A;
+    --teal-dark:#123634;
+    --brass:#B8863E;
+    --success:#3F6C4A;
+    --success-bg:#E4EDE3;
+    --rust:#A6402F;
+    --rust-bg:#F3E3DF;
+    --amber:#8A6415;
+    --amber-bg:#F1E7CE;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper-dark);
+    font-family:'IBM Plex Sans', sans-serif;
+    color:var(--ink);
+    min-height:100vh;
+    padding:24px 16px 60px;
+  }
+  .app{max-width:640px;margin:0 auto;}
+  .brand{text-align:center;margin-bottom:22px;}
+  .brand .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--teal);display:block;margin-bottom:6px;
+  }
+  .brand h1{font-family:'Metal Mania', 'Fraunces', serif;font-weight:400;font-size:clamp(38px,9vw,62px);margin:0;letter-spacing:.02em;color:var(--ink);}
+  .brand .meta{font-size:13px;color:var(--ink-soft);margin-top:6px;}
+  nav.tabs{
+    display:flex;gap:6px;background:var(--paper);
+    border:1px solid rgba(42,39,33,0.14);border-radius:10px;padding:5px;margin-bottom:20px;
+  }
+  nav.tabs button{
+    flex:1;padding:10px 8px;border:none;background:transparent;
+    font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:500;
+    color:var(--ink-soft);border-radius:7px;cursor:pointer;transition:background .15s ease, color .15s ease;
+  }
+  nav.tabs button.active{background:var(--teal);color:var(--paper);}
+  nav.subtabs{display:flex;gap:6px;margin-bottom:16px;}
+  nav.subtabs button{
+    flex:1;padding:8px;border:1px solid rgba(42,39,33,0.2);background:transparent;
+    border-radius:7px;font-size:12.5px;font-weight:500;color:var(--ink-soft);cursor:pointer;
+  }
+  nav.subtabs button.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .view{display:none;}
+  .view.active{display:block;animation:fade .25s ease;}
+  .subview{display:none;}
+  .subview.active{display:block;animation:fade .2s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+  .card{background:var(--paper);border:1px solid rgba(42,39,33,0.14);border-radius:14px;padding:22px;margin-bottom:16px;}
+  .card h2{font-family:'Fraunces',serif;font-size:19px;margin:0 0 14px;}
+  .card p.hint{font-size:12.5px;color:var(--ink-soft);margin:-8px 0 14px;}
+  .row{display:flex;justify-content:space-between;font-size:14px;padding:8px 0;border-bottom:1px dashed rgba(42,39,33,0.15);align-items:center;gap:10px;}
+  .row:last-child{border-bottom:none;}
+  .row .label{color:var(--ink-soft);}
+  .row .value{font-weight:600;font-family:'IBM Plex Mono',monospace;text-align:right;word-break:break-all;}
+
+  .capacity-bar{height:8px;background:rgba(42,39,33,0.1);border-radius:4px;overflow:hidden;margin-top:10px;}
+  .capacity-bar-fill{height:100%;background:var(--teal);transition:width .3s ease;}
+
+  label{display:block;font-size:12px;color:var(--ink-soft);margin:12px 0 4px;font-weight:500;}
+  input[type=text], input[type=email], input[type=password], input[type=tel]{
+    width:100%;padding:11px 12px;border:1px solid rgba(42,39,33,0.22);border-radius:8px;
+    font-family:'IBM Plex Sans',sans-serif;font-size:14px;background:#fff;color:var(--ink);
+  }
+  input:focus{outline:2px solid var(--teal);outline-offset:1px;}
+  .checkbox-group{display:flex;flex-direction:column;gap:8px;margin-top:6px;}
+  .checkbox-item{
+    display:flex;align-items:center;gap:9px;font-size:14px;font-weight:400;
+    color:var(--ink);margin:0;padding:10px 12px;border:1px solid rgba(42,39,33,0.2);
+    border-radius:8px;background:#fff;cursor:pointer;
+  }
+  .checkbox-item input{width:16px;height:16px;accent-color:var(--teal);cursor:pointer;}
+
+  button.primary{
+    width:100%;margin-top:18px;padding:14px;border:none;border-radius:9px;
+    background:var(--teal);color:var(--paper);font-size:15px;font-weight:600;
+    font-family:'IBM Plex Sans',sans-serif;cursor:pointer;transition:background .15s ease, opacity .15s ease;
+  }
+  button.primary:hover:not(:disabled){background:var(--teal-dark);}
+  button.primary:disabled{opacity:.5;cursor:not-allowed;}
+  button.ghost{
+    width:100%;margin-top:10px;padding:12px;border:1px solid rgba(42,39,33,0.25);
+    border-radius:9px;background:transparent;color:var(--ink);font-size:14px;font-weight:500;cursor:pointer;
+  }
+  button.small{
+    padding:8px 12px;border:1px solid rgba(42,39,33,0.25);border-radius:7px;
+    background:transparent;font-size:12.5px;font-weight:500;cursor:pointer;color:var(--ink);white-space:nowrap;
+  }
+  button.approve{background:var(--success);color:#fff;border:none;}
+  button.reject{background:transparent;color:var(--rust);border:1px solid var(--rust);}
+
+  .banner{padding:12px 14px;border-radius:8px;font-size:13px;font-weight:500;text-align:center;margin-top:14px;}
+  .banner.rust{background:var(--rust-bg);color:var(--rust);}
+  .banner.amber{background:var(--amber-bg);color:var(--amber);}
+  .banner.success{background:var(--success-bg);color:var(--success);}
+
+  .upi-box{background:#fff;border:1px solid rgba(42,39,33,0.15);border-radius:10px;padding:16px;text-align:center;}
+  .upi-box .qr-wrap{display:inline-block;padding:8px;background:#fff;}
+  .upi-box .qr-wrap canvas, .upi-box .qr-wrap img{display:block;}
+
+  /* Ticket stub */
+  .ticket{position:relative;background:var(--paper);border:1px solid rgba(42,39,33,0.16);border-radius:16px;display:flex;flex-direction:column;overflow:hidden;margin-bottom:14px;}
+  .ticket .ticket-row{display:flex;}
+  .ticket .stub-main{flex:1;padding:22px;}
+  .ticket .stub-main .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--teal);}
+  .ticket .stub-main h3{font-family:'Fraunces',serif;font-size:22px;margin:4px 0 10px;}
+  .ticket .stub-main .line{font-size:13px;color:var(--ink-soft);margin:2px 0;}
+  .ticket .stub-main .code{margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--brass);letter-spacing:.05em;}
+  .ticket .perforation{width:0;border-left:2px dashed rgba(42,39,33,0.3);position:relative;}
+  .ticket .perforation::before, .ticket .perforation::after{content:'';position:absolute;left:-9px;width:18px;height:18px;background:var(--paper-dark);border-radius:50%;}
+  .ticket .perforation::before{top:-9px;}
+  .ticket .perforation::after{bottom:-9px;}
+  .ticket .stub-qr{width:170px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 12px;gap:8px;}
+  .stub-qr .qr-box{background:#fff;padding:8px;border-radius:8px;}
+  .stub-qr .hint{font-size:10px;color:var(--ink-soft);text-align:center;}
+  .ticket .ticket-rules{border-top:2px dashed rgba(42,39,33,0.25);padding:16px 22px 20px;}
+  .ticket .rules-title{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:10px;}
+  .ticket .rules-grid{display:flex;gap:22px;flex-wrap:wrap;}
+  .ticket .rules-col{flex:1;min-width:180px;}
+  .ticket .rules-label{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.08em;padding:2px 8px;border-radius:5px;margin-bottom:6px;}
+  .ticket .rules-label.do{background:var(--success-bg);color:var(--success);}
+  .ticket .rules-label.dont{background:var(--rust-bg);color:var(--rust);}
+  .ticket .rules-col ul{margin:6px 0 0;padding-left:18px;}
+  .ticket .rules-col li{font-size:12.5px;color:var(--ink);line-height:1.5;margin-bottom:5px;}
+  @media (max-width:480px){
+    .ticket .ticket-row{flex-direction:column;}
+    .ticket .perforation{width:auto;height:0;border-left:none;border-top:2px dashed rgba(42,39,33,0.3);margin:0 20px;}
+    .ticket .perforation::before{top:-9px;left:-9px;}
+    .ticket .perforation::after{bottom:auto;top:-9px;left:auto;right:-9px;}
+    .stub-qr{width:auto;}
+    .ticket .rules-grid{flex-direction:column;gap:14px;}
+  }
+
+  #qr-reader{border-radius:12px;overflow:hidden;}
+  .scan-status{margin-top:14px;padding:16px;border-radius:10px;text-align:center;font-weight:600;font-size:15px;display:none;}
+  .scan-status.show{display:block;}
+  .scan-status.valid{background:var(--success-bg);color:var(--success);}
+  .scan-status.invalid{background:var(--rust-bg);color:var(--rust);}
+  .scan-status .sub{display:block;font-weight:400;font-size:12px;margin-top:4px;}
+
+  .entry-log{max-height:280px;overflow-y:auto;margin-top:4px;}
+  .entry-row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;padding:10px 0;border-bottom:1px solid rgba(42,39,33,0.08);}
+  .entry-row:last-child{border-bottom:none;}
+  .entry-row .meta{color:var(--ink-soft);font-size:11.5px;}
+  .entry-row .time{color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:11px;}
+  .entry-row .actions{display:flex;gap:6px;flex-shrink:0;}
+  .empty-note{font-size:13px;color:var(--ink-soft);text-align:center;padding:20px 0;}
+  .config-note{font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:22px;line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="brand">
+    <span class="eyebrow">Admission Pass</span>
+    <h1 id="brand-title">The Gathering</h1>
+    <div class="meta" id="brand-meta">Sat, 26 Jul 2026 · 7:00 PM · Venue TBC</div>
+  </div>
+
+  <nav class="tabs">
+    <button data-view="register" class="active">Register</button>
+    <button data-view="admin">Admin</button>
+  </nav>
+
+  <!-- REGISTER VIEW (guest-facing) -->
+  <section id="view-register" class="view active">
+    <div class="card">
+      <h2>Event & availability</h2>
+      <div class="row"><span class="label">Ticket price (per person)</span><span class="value" id="price-display">₹500</span></div>
+      <div class="row"><span class="label">Confirmed spots</span><span class="value" id="capacity-display">0 / 60</span></div>
+      <div class="capacity-bar"><div class="capacity-bar-fill" id="capacity-fill" style="width:0%"></div></div>
+      <div class="row"><span class="label">Venue</span><span class="value"><span id="venue-name-display">Venue TBC</span> <a id="venue-link" href="#" target="_blank" rel="noopener" style="color:var(--teal);font-family:'IBM Plex Sans',sans-serif;font-weight:500;">📍 Get directions</a></span></div>
+    </div>
+
+    <div class="card">
+      <h2>Step 1 — Pay via UPI</h2>
+      <p class="hint">Set your ticket count below, then pay the <b>total shown</b> via any UPI app and note the transaction/UTR reference number — you'll need it in Step 2.</p>
+      <div class="row" style="border:none;padding-bottom:6px;">
+        <span class="label">Tickets for this QR</span>
+        <span class="value"><input type="number" id="upi-qty" min="1" max="8" value="1" style="width:64px;padding:6px 8px;text-align:center;"></span>
+      </div>
+      <div class="upi-box">
+        <div class="qr-wrap" id="upi-qr"></div>
+        <div class="row" style="border:none;justify-content:center;margin-top:6px;">
+          <span class="label">Total to pay</span><span class="value" id="upi-total-display">₹500</span>
+        </div>
+        <div class="row" style="border:none;justify-content:center;gap:8px;margin-top:8px;">
+          <span class="value" id="upi-id-display">yourname@upi</span>
+          <button class="small" id="copy-upi-btn">Copy</button>
+        </div>
+        <div style="font-size:12px;color:var(--ink-soft);margin-top:4px;">or call/UPI to <span id="upi-phone-display">+91 00000 00000</span></div>
+      </div>
+    </div>
+
+    <div class="card" id="submit-form-card">
+      <h2>Step 2 — Submit for verification</h2>
+      <p class="hint">The organizer checks each payment manually before your ticket is issued.</p>
+      <label>Full name</label>
+      <input type="text" id="reg-name" placeholder="As it should appear on your pass">
+      <label>Email</label>
+      <input type="email" id="reg-email" placeholder="you@example.com">
+      <label>Phone</label>
+      <input type="tel" id="reg-phone" placeholder="+91 98765 43210">
+      <label>UPI transaction / UTR reference</label>
+      <input type="text" id="reg-upiref" placeholder="e.g. 402519873456">
+      <div class="row" style="border:none;padding:6px 0 0;">
+        <span class="label">Tickets you're paying for</span>
+        <span class="value" id="reg-qty-display">1</span>
+      </div>
+      <label>Where did you hear about this event? (pick one)</label>
+      <div class="checkbox-group">
+        <label class="checkbox-item"><input type="radio" name="source-band" class="source-band" value="MYTH"> MYTH</label>
+        <label class="checkbox-item"><input type="radio" name="source-band" class="source-band" value="Undestined"> Undestined</label>
+        <label class="checkbox-item"><input type="radio" name="source-band" class="source-band" value="Monks"> Monks</label>
+      </div>
+      <button class="primary" id="submit-btn">I've paid — submit for verification</button>
+      <div id="sold-out-msg" style="display:none" class="banner rust">All spots are confirmed. New submissions can't be accepted right now.</div>
+    </div>
+
+    <div id="submit-result"></div>
+
+    <div class="card">
+      <h2>Check your ticket status</h2>
+      <p class="hint">Enter the reference ID you were given after submitting, or the email you registered with.</p>
+      <input type="text" id="status-lookup" placeholder="Reference ID or email">
+      <button class="ghost" id="status-check-btn">Check status</button>
+      <div id="status-result"></div>
+    </div>
+  </section>
+
+  <!-- ADMIN VIEW -->
+  <section id="view-admin" class="view">
+    <div class="card" id="admin-lock-card">
+      <h2>Admin access</h2>
+      <p class="hint">Enter the organizer PIN to approve payments, scan guests in, and view the dashboard.</p>
+      <input type="password" id="admin-pin-input" placeholder="PIN">
+      <button class="primary" id="admin-unlock-btn">Unlock</button>
+      <div id="admin-pin-error"></div>
+    </div>
+
+    <div id="admin-panel" style="display:none;">
+      <nav class="subtabs">
+        <button data-sub="approvals" class="active">Approvals</button>
+        <button data-sub="checkin">Check-In</button>
+        <button data-sub="dash">Dashboard</button>
+      </nav>
+
+      <div id="sub-approvals" class="subview active">
+        <div class="card">
+          <h2>Pending payments</h2>
+          <div class="entry-log" id="pending-log"><div class="empty-note">No pending submissions.</div></div>
+        </div>
+        <div class="card">
+          <h2>Email delivery log</h2>
+          <p class="hint">Shows the result of ticket emails sent this session — useful for spotting why a send failed.</p>
+          <div class="entry-log" id="email-log"><div class="empty-note">No email attempts yet this session.</div></div>
+        </div>
+      </div>
+
+      <div id="sub-checkin" class="subview">
+        <div class="card">
+          <h2>Staff check-in</h2>
+          <p class="hint">Point the camera at a guest's QR code. Each code works once.</p>
+          <div id="qr-reader"></div>
+          <button class="primary" id="scan-toggle-btn">Start scanner</button>
+          <div class="scan-status" id="scan-status"></div>
+        </div>
+        <div class="card">
+          <h2>Recent check-ins</h2>
+          <div class="entry-log" id="recent-log"><div class="empty-note">No check-ins yet.</div></div>
+        </div>
+      </div>
+
+      <div id="sub-dash" class="subview">
+        <div class="card">
+          <h2>Live headcount</h2>
+          <div class="row"><span class="label">Tickets confirmed</span><span class="value" id="dash-sold">0 / 60</span></div>
+          <div class="row"><span class="label">Guests entered</span><span class="value" id="dash-entered">0</span></div>
+          <div class="row"><span class="label">Not yet arrived</span><span class="value" id="dash-remaining">0</span></div>
+          <div class="row"><span class="label">Pending payments</span><span class="value" id="dash-pending">0</span></div>
+          <button class="ghost" id="refresh-dash-btn">Refresh</button>
+        </div>
+        <div class="card">
+          <h2>Guest list</h2>
+          <p class="hint">Full record of every issued ticket — name, contact details, ticket code, payment reference, and entry status.</p>
+          <button class="ghost" id="export-csv-btn">Export full record (CSV)</button>
+          <div class="entry-log" id="guest-list" style="margin-top:12px;"><div class="empty-note">No tickets confirmed yet.</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="config-note">Payments are verified manually by the organizer against their UPI app — this page does not move money itself. The admin PIN is a soft gate against casual guests wandering into staff views, not real security.</div>
+</div>
+
+<script>
+/* ============ CONFIG — edit these for your event ============ */
+const EVENT = {
+  name: "M.U.M",
+  dateTime: "Sunday, 26 July 2026 · 3:00 PM",
+  venueName: "Biswas Enclave, Kasba, Kolkata",
+  venueMapLink: "https://maps.app.goo.gl/c61Jdtr5MVm3JkU97",
+  price: 199.69,
+  maxGuests: 70,
+  upiId: "tarsannay24@oksbi",
+  upiPhone: "+91 90641 50021",
+  adminPin: "2026"
+};
+
+/* ============ EmailJS — fill these in from your EmailJS account ============ */
+/* 1. Create a free account at emailjs.com
+   2. Add an Email Service -> copy its Service ID below
+   3. Create an Email Template. In the template settings, set "To Email" to
+      {{to_email}} (or one of the aliases sent below, such as {{email}}).
+      Add these merge fields to the template body as needed:
+      {{to_email}} {{to_name}} {{event_name}} {{event_datetime}}
+      {{venue_name}} {{venue_link}} {{ticket_code}} {{ticket_index}} {{ticket_total}}
+      {{qr_image}} {{rules_text}}
+      — for the QR to show up in the email, put an <img src="{{qr_image}}"> tag
+        directly in the template's HTML source.
+   4. Copy the Template ID and your account's Public Key below. */
+const EMAILJS_CONFIG = {
+  serviceId: "service_t4dy54m",
+  templateId: "template_dzfluia",
+  publicKey: "iEChL57v_RVnw2j2F"
+};
+const emailjsReady = () => window.emailjs
+  && EMAILJS_CONFIG.serviceId !== "YOUR_EMAILJS_SERVICE_ID"
+  && EMAILJS_CONFIG.templateId !== "YOUR_EMAILJS_TEMPLATE_ID"
+  && EMAILJS_CONFIG.publicKey !== "YOUR_EMAILJS_PUBLIC_KEY";
+if (window.emailjs && emailjsReady()) {
+  emailjs.init({ publicKey: EMAILJS_CONFIG.publicKey });
+}
+
+/* Local browser fallback for Claude artifact storage.
+   The original app used window.storage, which only exists in some hosted
+   artifact environments. This shim lets the page run as a normal .html file. */
+if (!window.storage) {
+  window.storage = {
+    async get(key) {
+      const value = localStorage.getItem(key);
+      return value === null ? null : { key, value };
+    },
+    async set(key, value) {
+      localStorage.setItem(key, value);
+      return { key, value };
+    },
+    async list(prefix) {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) keys.push(key);
+      }
+      return { keys };
+    },
+    async delete(key) {
+      localStorage.removeItem(key);
+    }
+  };
+}
+
+/* ============ Ticket fine print — quirky, sarcastic, non-negotiable ============ */
+const TICKET_RULES = {
+  dos: [
+    "Do scream every lyric like you personally wrote it.",
+    "Do arrive by doors-open. Sound checks don't wait for your fit pic.",
+    "Do hydrate — moshing dehydrates faster than your group chat drama.",
+    "Do make a new friend in the pit. Trauma bonding is a love language."
+  ],
+  donts: [
+    "Don't ask the bouncer for a \"friends and family\" rate. There isn't one.",
+    "Don't crowd-surf if leg day was sometime in 2019.",
+    "Don't film the entire set. You will never, ever watch it back.",
+    "Don't lose this QR. We will not be emotionally available about it.",
+    "Only rule is to not get caught."
+  ]
+};
+function rulesPlainText(){
+  return "DO:\n" + TICKET_RULES.dos.map(d=>"- "+d).join("\n")
+    + "\n\nDON'T:\n" + TICKET_RULES.donts.map(d=>"- "+d).join("\n");
+}
+
+document.getElementById('brand-title').textContent = EVENT.name;
+
+/* ============ Test mode — isolates test submissions from real capacity/sales ============
+   Normally this checks for ?test=1 in the URL. It's temporarily forced to `true` below
+   so you can try it out right here in the artifact preview (which can't easily carry a
+   query string). Flip it back to the commented-out line before publishing for real use. */
+const TEST_MODE = true; // <-- MOCKED for testing. Swap with the line below before going live:
+// const TEST_MODE = new URLSearchParams(location.search).get('test') === '1';
+const TICKET_PREFIX = TEST_MODE ? 'test-ticket:' : 'ticket:';
+const REQUEST_PREFIX = TEST_MODE ? 'test-request:' : 'request:';
+if (TEST_MODE) {
+  const banner = document.createElement('div');
+  banner.textContent = '🧪 TEST MODE — submissions here do not count toward real capacity or sales.';
+  banner.style.cssText = 'position:sticky;top:0;z-index:999;background:#8A6415;color:#F1E7CE;text-align:center;padding:8px 12px;font-family:IBM Plex Sans,sans-serif;font-size:12.5px;font-weight:600;';
+  document.body.prepend(banner);
+}
+document.getElementById('brand-meta').textContent = `${EVENT.dateTime} · ${EVENT.venueName}`;
+document.getElementById('price-display').textContent = '₹' + EVENT.price;
+document.getElementById('venue-name-display').textContent = EVENT.venueName;
+const venueLinkEl = document.getElementById('venue-link');
+if(EVENT.venueMapLink){ venueLinkEl.href = EVENT.venueMapLink; venueLinkEl.style.display = 'inline'; }
+else { venueLinkEl.style.display = 'none'; }
+document.getElementById('upi-id-display').textContent = EVENT.upiId;
+document.getElementById('upi-phone-display').textContent = EVENT.upiPhone;
+document.getElementById('sold-out-msg').textContent = `All ${EVENT.maxGuests} spots are confirmed. New submissions can't be accepted right now.`;
+
+let upiQrInstance = null;
+function renderUpiQr(qty){
+  const amount = (EVENT.price * qty).toFixed(2);
+  document.getElementById('upi-total-display').textContent = '₹' + amount;
+  document.getElementById('reg-qty-display').textContent = qty;
+  const target = document.getElementById('upi-qr');
+  target.innerHTML = '';
+  if (!window.QRCode) {
+    target.innerHTML = '<div class="empty-note" style="padding:12px;">QR library failed to load. Use the UPI ID below, or reconnect to the internet and reload.</div>';
+    return;
+  }
+  upiQrInstance = new QRCode(target, {
+    text: `upi://pay?pa=${encodeURIComponent(EVENT.upiId)}&pn=${encodeURIComponent(EVENT.name)}&am=${amount}&cu=INR&tn=${encodeURIComponent('Ticket x'+qty+' - '+EVENT.name)}`,
+    width: 150, height: 150, colorDark:'#2A2721', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.M
+  });
+}
+function currentQty(){
+  const el = document.getElementById('upi-qty');
+  let v = parseInt(el.value, 10);
+  if(!Number.isFinite(v) || v < 1) v = 1;
+  if(v > 8) v = 8;
+  el.value = v;
+  return v;
+}
+document.getElementById('upi-qty').addEventListener('input', ()=>{
+  renderUpiQr(currentQty());
+  refreshCapacity();
+});
+renderUpiQr(1);
+
+document.getElementById('copy-upi-btn').addEventListener('click', ()=>{
+  navigator.clipboard.writeText(EVENT.upiId).then(()=>{
+    const b = document.getElementById('copy-upi-btn');
+    b.textContent = 'Copied'; setTimeout(()=>b.textContent='Copy', 1500);
+  });
+});
+
+/* ============ Storage helpers (shared across all visitors) ============
+   IMPORTANT — read before relying on this for a real, paid event:
+   `window.storage` with shared=true has NO per-user authentication. Every
+   visitor's browser can call get/set/list/delete on these same keys directly
+   from devtools — the admin PIN only hides the *UI*, it does not protect the
+   underlying data. In practice that means a technically-inclined guest could,
+   without the PIN:
+     - list and read every registration/ticket (names, emails, phone numbers,
+       UPI transaction references),
+     - write a ticket record directly (i.e. forge a valid ticket without
+       paying or being approved),
+     - or flip a used ticket back to unused to re-enter.
+   There is no fix for this available within a client-only artifact — it
+   would require a real backend that authenticates the admin server-side
+   before allowing writes/reads (e.g. a small serverless function + database
+   with an actual auth check). Fine for a low-stakes, trusted-crowd event;
+   not something to rely on for anything adversarial or high-value. */
+async function getRecord(key){
+  try{ const r = await window.storage.get(key, true); return r ? JSON.parse(r.value) : null; }
+  catch(e){ return null; }
+}
+async function setRecord(key, data){ return window.storage.set(key, JSON.stringify(data), true); }
+async function listKeys(prefix){
+  try{ const r = await window.storage.list(prefix, true); return r ? r.keys : []; }
+  catch(e){ return []; }
+}
+async function getAll(prefix){
+  const keys = await listKeys(prefix);
+  const out = [];
+  for(const k of keys){ const r = await getRecord(k); if(r) out.push(r); }
+  return out;
+}
+function genId(len){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s=''; for(let i=0;i<len;i++) s += chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+function escapeHtml(s){ const d=document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
+
+/* ============ Top-level nav ============ */
+document.querySelectorAll('nav.tabs > button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs > button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+    if(btn.dataset.view==='register') refreshCapacity();
+  });
+});
+
+/* ============ Admin unlock + sub-nav ============ */
+let adminUnlocked = false;
+document.getElementById('admin-unlock-btn').addEventListener('click', ()=>{
+  const val = document.getElementById('admin-pin-input').value;
+  if(val === EVENT.adminPin){
+    adminUnlocked = true;
+    document.getElementById('admin-lock-card').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+    refreshApprovals(); refreshDashboard();
+  } else {
+    document.getElementById('admin-pin-error').innerHTML = '<div class="banner rust">Incorrect PIN.</div>';
+  }
+});
+document.querySelectorAll('nav.subtabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.subtabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.subview').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('sub-'+btn.dataset.sub).classList.add('active');
+    if(btn.dataset.sub==='approvals') refreshApprovals();
+    if(btn.dataset.sub==='dash') refreshDashboard();
+  });
+});
+
+/* ============ Capacity ============ */
+async function refreshCapacity(){
+  const tickets = await getAll(TICKET_PREFIX);
+  const sold = tickets.length;
+  document.getElementById('capacity-display').textContent = `${sold} / ${EVENT.maxGuests}`;
+  document.getElementById('capacity-fill').style.width = Math.min(100,(sold/EVENT.maxGuests)*100)+'%';
+  const remaining = EVENT.maxGuests - sold;
+  const qty = currentQty();
+  const wontFit = remaining < qty || remaining <= 0;
+  document.getElementById('submit-btn').disabled = wontFit;
+  document.getElementById('sold-out-msg').style.display = wontFit ? 'block':'none';
+  document.getElementById('sold-out-msg').textContent = remaining <= 0
+    ? `All ${EVENT.maxGuests} spots are confirmed. New submissions can't be accepted right now.`
+    : `Only ${remaining} spot${remaining===1?'':'s'} left — lower your ticket count to submit.`;
+  return sold;
+}
+refreshCapacity();
+
+/* ============ Step 2: submit for verification ============ */
+document.getElementById('submit-btn').addEventListener('click', async ()=>{
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const phone = document.getElementById('reg-phone').value.trim();
+  const upiref = document.getElementById('reg-upiref').value.trim();
+  const qty = currentQty();
+  const selectedBand = document.querySelector('.source-band:checked');
+  const sourceBand = selectedBand ? selectedBand.value : null;
+  if(!name || !email || !upiref){ alert('Please fill in your name, email, and UPI transaction reference.'); return; }
+  if(!sourceBand){ alert('Please select how you heard about the event.'); return; }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+
+  const sold = await refreshCapacity();
+  if(sold + qty > EVENT.maxGuests){
+    alert(`Only ${EVENT.maxGuests - sold} spot(s) left — lower your ticket count.`);
+    btn.disabled = false; btn.textContent = "I've paid — submit for verification";
+    return;
+  }
+
+  const reqId = genId(8);
+  const request = {
+    reqId, name, email, phone, upiref, qty,
+    sourceBand, sourceBands:[sourceBand], // sourceBands kept for backward compatibility with dashboards
+    submittedAt: new Date().toISOString(), status:'pending', ticketIds:[], note:null
+  };
+  await setRecord(REQUEST_PREFIX+reqId, request);
+
+  document.getElementById('submit-form-card').style.display = 'none';
+  document.getElementById('submit-result').innerHTML = `
+    <div class="card">
+      <h2>Submitted</h2>
+      <p class="hint" style="margin-top:0;">Save this reference ID — you'll use it (or your email) to check your ticket status once the organizer verifies your payment.</p>
+      <div class="row"><span class="label">Reference ID</span><span class="value">${reqId}</span></div>
+      <div class="row"><span class="label">Tickets requested</span><span class="value">${qty}</span></div>
+      <button class="ghost" id="submit-another-btn">Submit another registration</button>
+    </div>`;
+  document.getElementById('submit-another-btn').addEventListener('click', ()=>{
+    document.getElementById('reg-name').value=''; document.getElementById('reg-email').value='';
+    document.getElementById('reg-phone').value=''; document.getElementById('reg-upiref').value='';
+    document.querySelectorAll('.source-band').forEach(cb=>cb.checked=false);
+    document.getElementById('upi-qty').value = 1;
+    renderUpiQr(1);
+    document.getElementById('submit-result').innerHTML='';
+    document.getElementById('submit-form-card').style.display='block';
+    btn.disabled=false; btn.textContent = "I've paid — submit for verification";
+    refreshCapacity();
+  });
+});
+
+/* ============ Status check (guest side) ============ */
+document.getElementById('status-check-btn').addEventListener('click', async ()=>{
+  const q = document.getElementById('status-lookup').value.trim();
+  const resultEl = document.getElementById('status-result');
+  if(!q){ resultEl.innerHTML = '<div class="banner amber">Enter a reference ID or email.</div>'; return; }
+
+  let request = await getRecord(REQUEST_PREFIX+q.toUpperCase());
+  if(!request){
+    const all = await getAll(REQUEST_PREFIX);
+    const matches = all.filter(r => (r.email||'').toLowerCase() === q.toLowerCase());
+    if(matches.length){
+      // A guest can end up with more than one request under the same email
+      // (resubmitted after a rejection, submitted twice by accident, etc).
+      // Show the most useful one: approved beats pending beats rejected;
+      // ties broken by most recent submission.
+      const statusRank = { approved: 2, pending: 1, rejected: 0 };
+      matches.sort((a,b)=>{
+        const rankDiff = (statusRank[b.status] ?? 0) - (statusRank[a.status] ?? 0);
+        if(rankDiff !== 0) return rankDiff;
+        return new Date(b.submittedAt) - new Date(a.submittedAt);
+      });
+      request = matches[0];
+    }
+  }
+  if(!request){ resultEl.innerHTML = '<div class="banner rust">No matching submission found.</div>'; return; }
+
+  if(request.status === 'pending'){
+    resultEl.innerHTML = '<div class="banner amber">Still being verified — check back soon.</div>';
+  } else if(request.status === 'rejected'){
+    resultEl.innerHTML = `<div class="banner rust">Payment could not be verified.${request.note ? ' Note: '+escapeHtml(request.note) : ' Please contact the organizer.'}</div>`;
+  } else if(request.status === 'approved'){
+    const ticketIds = request.ticketIds && request.ticketIds.length ? request.ticketIds : (request.ticketId ? [request.ticketId] : []);
+    resultEl.innerHTML = '';
+    for(const tid of ticketIds){
+      const ticket = await getRecord(TICKET_PREFIX+tid);
+      if(!ticket) continue;
+      const holder = document.createElement('div');
+      resultEl.appendChild(holder);
+      renderTicketStub(ticket, holder);
+    }
+    if(ticketIds.length === 0){
+      resultEl.innerHTML = '<div class="banner amber">Approved, but no tickets were found — contact the organizer.</div>';
+    }
+  }
+});
+
+/* ============ Admin: Approvals ============ */
+async function refreshApprovals(){
+  const all = await getAll(REQUEST_PREFIX);
+  const pending = all.filter(r=>r.status==='pending').sort((a,b)=> new Date(a.submittedAt)-new Date(b.submittedAt));
+  const log = document.getElementById('pending-log');
+  if(pending.length===0){ log.innerHTML = '<div class="empty-note">No pending submissions.</div>'; return; }
+
+  // Flag UTR/reference numbers and email addresses that appear on more than
+  // one request (pending or already approved) — common signs of an
+  // accidental double-submit, or someone trying to reuse one payment /
+  // register twice under different names.
+  const normRef = (v)=> (v||'').toString().trim().toLowerCase();
+  const refCounts = {};
+  const emailCounts = {};
+  all.forEach(r=>{
+    if(r.status==='rejected') return; // rejected entries don't count against reuse
+    const refKey = normRef(r.upiref);
+    if(refKey) refCounts[refKey] = (refCounts[refKey]||0) + 1;
+    const emailKey = normRef(r.email);
+    if(emailKey) emailCounts[emailKey] = (emailCounts[emailKey]||0) + 1;
+  });
+
+  log.innerHTML = pending.map(r=>{
+    const refKey = normRef(r.upiref);
+    const emailKey = normRef(r.email);
+    const warnings = [];
+    if(refKey && refCounts[refKey] > 1){
+      warnings.push(`⚠️ This reference number appears on ${refCounts[refKey]} requests — check it hasn't already been approved elsewhere before confirming.`);
+    }
+    if(emailKey && emailCounts[emailKey] > 1){
+      warnings.push(`⚠️ This email appears on ${emailCounts[emailKey]} requests — check for a duplicate or earlier submission before confirming.`);
+    }
+    const warningHtml = warnings.map(w=>`<div class="banner amber" style="margin:0;padding:8px 10px;text-align:left;">${w}</div>`).join('');
+    return `
+    <div class="entry-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+      <div style="display:flex;justify-content:space-between;">
+        <strong>${escapeHtml(r.name)}</strong>
+        <span class="time">${new Date(r.submittedAt).toLocaleString()}</span>
+      </div>
+      <div class="meta">${escapeHtml(r.email)} · ${escapeHtml(r.phone||'—')}</div>
+      <div class="meta">UTR/Ref: ${escapeHtml(r.upiref)}</div>
+      <div class="meta">Tickets requested: <strong>${r.qty||1}</strong></div>
+      <div class="meta">Heard via: ${escapeHtml(r.sourceBand || (r.sourceBands||[]).join(', ') || '—')}</div>
+      ${warningHtml}
+      <div class="actions" style="justify-content:flex-end;">
+        <button class="small approve" data-approve="${r.reqId}">Approve</button>
+        <button class="small reject" data-reject="${r.reqId}">Reject</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  log.querySelectorAll('[data-approve]').forEach(b=>b.addEventListener('click', ()=>{
+    if(b.disabled) return;
+    // Disable immediately (before any async work) so a fast double-click or a
+    // second admin session can't both slip past the capacity check below.
+    b.disabled = true; b.textContent = 'Approving…';
+    approveRequest(b.dataset.approve).finally(()=>{
+      // If approveRequest bailed out early (e.g. capacity exceeded / already
+      // handled elsewhere) and didn't re-render the list, restore the button.
+      if(document.body.contains(b) && b.textContent === 'Approving…'){
+        b.disabled = false; b.textContent = 'Approve';
+      }
+    });
+  }));
+  log.querySelectorAll('[data-reject]').forEach(b=>b.addEventListener('click', ()=>{
+    if(b.disabled) return;
+    b.disabled = true;
+    rejectRequest(b.dataset.reject).finally(()=>{
+      if(document.body.contains(b)) b.disabled = false;
+    });
+  }));
+}
+
+async function approveRequest(reqId){
+  const request = await getRecord(REQUEST_PREFIX+reqId);
+  if(!request || request.status !== 'pending') return;
+  const qty = request.qty || 1;
+  const tickets = await getAll(TICKET_PREFIX);
+  const sold = tickets.length;
+  if(sold + qty > EVENT.maxGuests){
+    alert(`Approving ${qty} ticket(s) would exceed capacity (${EVENT.maxGuests}, ${sold} already sold). Reject or wait for spots to free up.`);
+    return;
+  }
+
+  // Re-read the request right before committing. This narrows (but, since the
+  // underlying storage has no real transactions, can't fully close) the window
+  // where a second click or a second admin session approves the same request twice.
+  const recheck = await getRecord(REQUEST_PREFIX+reqId);
+  if(!recheck || recheck.status !== 'pending'){
+    alert('This request was already handled (possibly by another admin session).');
+    refreshApprovals(); refreshDashboard();
+    return;
+  }
+
+  const newTickets = [];
+  for(let i=0;i<qty;i++){
+    const ticketId = genId(20);
+    const ticket = {
+      id:ticketId, name:request.name, email:request.email, phone:request.phone||'',
+      upiref:request.upiref||'', purchasedAt:new Date().toISOString(), used:false, usedAt:null,
+      requestId:reqId, sourceBands:request.sourceBands||[],
+      ticketIndex:i+1, ticketTotal:qty
+    };
+    await setRecord(TICKET_PREFIX+ticketId, ticket);
+    newTickets.push(ticket);
+  }
+  request.status = 'approved';
+  request.ticketIds = newTickets.map(t=>t.id);
+  await setRecord(REQUEST_PREFIX+reqId, request);
+  refreshApprovals(); refreshDashboard(); refreshCapacity();
+
+  // Fire off ticket emails — approval isn't blocked on email delivery, but every
+  // attempt (success or failure) is recorded in the visible Email delivery log.
+  if(emailjsReady()){
+    for(const ticket of newTickets){
+      sendTicketEmail(ticket).then(result=>logEmailAttempt(ticket, result));
+    }
+  } else {
+    for(const ticket of newTickets){
+      logEmailAttempt(ticket, { skipped:true, reason:'EmailJS is not configured yet — see EMAILJS_CONFIG at the top of the script.' });
+    }
+  }
+}
+
+/* ============ Email delivery log (session-only, visible to the admin) ============ */
+const emailLog = [];
+function logEmailAttempt(ticket, result){
+  emailLog.unshift({ ticket, result, at: new Date() });
+  renderEmailLog();
+}
+function renderEmailLog(){
+  const el = document.getElementById('email-log');
+  if(!el) return;
+  if(emailLog.length === 0){ el.innerHTML = '<div class="empty-note">No email attempts yet this session.</div>'; return; }
+  el.innerHTML = emailLog.map((entry, idx)=>{
+    const { ticket, result, at } = entry;
+    let statusHtml, detailHtml = '', fallbackHtml = '';
+    if(result.sent){
+      statusHtml = '<span style="color:var(--success);font-weight:600;">✓ Sent</span>';
+    } else if(result.skipped){
+      statusHtml = '<span style="color:var(--amber);font-weight:600;">– Skipped</span>';
+      detailHtml = `<div class="meta">${escapeHtml(result.reason||'')}</div>`;
+    } else {
+      statusHtml = '<span style="color:var(--rust);font-weight:600;">✗ Failed</span>';
+      detailHtml = `<div class="meta">${escapeHtml(result.error||'Unknown error')}</div>`;
+      if(ticket.email){
+        fallbackHtml = `<button class="small" data-manual="${idx}">Send manually</button><button class="small" data-dlqr="${idx}">Download QR</button>`;
+      }
+    }
+    return `
+      <div class="entry-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+        <div style="display:flex;justify-content:space-between;">
+          <span>${escapeHtml(ticket.name)} · ${escapeHtml(ticket.email||'no email')}</span>
+          <span class="time">${at.toLocaleTimeString()}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+          ${statusHtml}
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${!result.sent ? `<button class="small" data-retry="${ticket.id}">Retry</button>` : ''}
+            ${fallbackHtml}
+          </div>
+        </div>
+        ${detailHtml}
+      </div>`;
+  }).join('');
+  el.querySelectorAll('[data-retry]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      b.disabled = true; b.textContent = 'Retrying…';
+      const ticket = await getRecord(TICKET_PREFIX+b.dataset.retry);
+      if(!ticket){ logEmailAttempt({name:'(unknown)',email:'',id:b.dataset.retry}, {sent:false, error:'Ticket record no longer exists.'}); return; }
+      const result = await sendTicketEmail(ticket);
+      logEmailAttempt(ticket, result);
+    });
+  });
+  el.querySelectorAll('[data-manual]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const entry = emailLog[Number(b.dataset.manual)];
+      if(!entry) return;
+      window.location.href = buildMailtoLink(entry.ticket);
+    });
+  });
+  el.querySelectorAll('[data-dlqr]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const entry = emailLog[Number(b.dataset.dlqr)];
+      if(!entry) return;
+      downloadTicketQr(entry.ticket);
+    });
+  });
+}
+async function rejectRequest(reqId){
+  const note = prompt("Optional note for the guest (e.g. Amount doesn't match):") || null;
+  const request = await getRecord(REQUEST_PREFIX+reqId);
+  if(!request) return;
+  request.status = 'rejected'; request.note = note;
+  await setRecord(REQUEST_PREFIX+reqId, request);
+  refreshApprovals(); refreshDashboard();
+}
+
+/* ============ Ticket stub renderer ============ */
+function renderTicketStub(ticket, targetEl){
+  const indexNote = ticket.ticketTotal && ticket.ticketTotal > 1
+    ? `Ticket ${ticket.ticketIndex} of ${ticket.ticketTotal}` : null;
+  targetEl.innerHTML = `
+    <div class="ticket">
+      <div class="ticket-row">
+        <div class="stub-main">
+          <span class="eyebrow">${EVENT.name}${indexNote ? ' · '+indexNote : ''}</span>
+          <h3>${escapeHtml(ticket.name)}</h3>
+          <div class="line">${EVENT.dateTime}</div>
+          <div class="line">${escapeHtml(EVENT.venueName)}${EVENT.venueMapLink ? ` · <a href="${EVENT.venueMapLink}" target="_blank" rel="noopener" style="color:var(--teal);">Get directions</a>` : ''}</div>
+          <div class="line">${escapeHtml(ticket.email)}</div>
+          <div class="code">CODE ${ticket.id}</div>
+        </div>
+        <div class="perforation"></div>
+        <div class="stub-qr">
+          <div class="qr-box" id="qr-box-${ticket.id}"></div>
+          <div class="hint">Show this at entry</div>
+          <button class="ghost" id="dl-${ticket.id}" style="margin-top:2px;">Download</button>
+        </div>
+      </div>
+      <div class="ticket-rules">
+        <div class="rules-title">The Fine Print (that nobody reads)</div>
+        <div class="rules-grid">
+          <div class="rules-col">
+            <span class="rules-label do">DO</span>
+            <ul>${TICKET_RULES.dos.map(d=>`<li>${escapeHtml(d)}</li>`).join('')}</ul>
+          </div>
+          <div class="rules-col">
+            <span class="rules-label dont">DON'T</span>
+            <ul>${TICKET_RULES.donts.map(d=>`<li>${escapeHtml(d)}</li>`).join('')}</ul>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  if (window.QRCode) {
+    new QRCode(document.getElementById('qr-box-'+ticket.id), {
+      text: ticket.id, width:132, height:132, colorDark:'#2A2721', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.M
+    });
+  } else {
+    document.getElementById('qr-box-'+ticket.id).innerHTML = '<div class="empty-note">QR unavailable</div>';
+  }
+  setTimeout(()=>{
+    document.getElementById('dl-'+ticket.id).addEventListener('click', ()=>{
+      const box = document.getElementById('qr-box-'+ticket.id);
+      const canvas = box.querySelector('canvas'); const img = box.querySelector('img');
+      const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+      if(!dataUrl) return;
+      const a = document.createElement('a'); a.href=dataUrl; a.download=`ticket-${ticket.id}.png`; a.click();
+    });
+  }, 50);
+}
+
+/* ============ Hidden QR render -> data URL (used for emailing tickets) ============ */
+function generateQrDataUrl(text){
+  return new Promise((resolve, reject)=>{
+    if (!window.QRCode) {
+      reject(new Error('QR library failed to load'));
+      return;
+    }
+    const hidden = document.createElement('div');
+    hidden.style.position = 'fixed'; hidden.style.left = '-9999px'; hidden.style.top = '0';
+    document.body.appendChild(hidden);
+    new QRCode(hidden, { text, width:220, height:220, colorDark:'#2A2721', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.M });
+    let attempts = 0;
+    const poll = setInterval(()=>{
+      attempts++;
+      const canvas = hidden.querySelector('canvas');
+      const img = hidden.querySelector('img');
+      const dataUrl = canvas ? canvas.toDataURL('image/png') : (img && img.src && img.src.startsWith('data:') ? img.src : null);
+      if(dataUrl || attempts > 40){ // ~2s max wait
+        clearInterval(poll);
+        document.body.removeChild(hidden);
+        if(dataUrl) resolve(dataUrl);
+        else reject(new Error('QR code image did not render in time'));
+      }
+    }, 50);
+  });
+}
+
+/* ============ Email a single ticket via EmailJS ============ */
+async function sendTicketEmail(ticket){
+  if(!emailjsReady()){
+    return { skipped:true, reason:'EmailJS is not configured (check EMAILJS_CONFIG at the top of the script).' };
+  }
+  const recipientEmail = (ticket.email || '').trim();
+  if(!recipientEmail){
+    return { sent:false, error:'This ticket has no email address on file.' };
+  }
+  let qrImage;
+  try{
+    qrImage = await generateQrDataUrl(ticket.id);
+  }catch(e){
+    return { sent:false, error:'Could not render the QR code for the email: '+e.message };
+  }
+  const params = {
+    to_email: recipientEmail,
+    email: recipientEmail,
+    user_email: recipientEmail,
+    recipient_email: recipientEmail,
+    reply_to: recipientEmail,
+    to_name: ticket.name,
+    name: ticket.name,
+    event_name: EVENT.name,
+    event_datetime: EVENT.dateTime,
+    venue_name: EVENT.venueName,
+    venue_link: EVENT.venueMapLink || '',
+    ticket_code: ticket.id,
+    ticket_index: ticket.ticketIndex || 1,
+    ticket_total: ticket.ticketTotal || 1,
+    qr_image: qrImage,
+    rules_text: rulesPlainText()
+  };
+  try{
+    await emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.templateId, params);
+    return { sent:true };
+  }catch(e){
+    // "Failed to fetch" here is a generic browser network error, not something
+    // EmailJS itself returned — when this app is running as a Claude.ai
+    // artifact, outbound fetch() calls to external APIs are blocked by the
+    // page's security sandbox, so EmailJS's request never leaves the browser.
+    // This is a platform restriction of the artifact preview, not a bad
+    // EMAILJS_CONFIG — it will work once the page is hosted outside Claude.ai.
+    const isNetworkBlocked = e instanceof TypeError && /Failed to fetch|NetworkError/i.test(e.message||'');
+    if(isNetworkBlocked){
+      return {
+        sent:false,
+        networkBlocked:true,
+        error:"Blocked by this preview's security sandbox — outbound email requests can't leave the page here. Use \"Send manually\" below, or host this file outside Claude.ai to enable automatic sending."
+      };
+    }
+    // EmailJS typically rejects with { status, text } rather than a normal Error object.
+    const detail = (e && (e.text || e.message)) ? (e.status ? `${e.status}: ${e.text}` : (e.text || e.message)) : JSON.stringify(e);
+    return { sent:false, error: detail };
+  }
+}
+
+/* ============ Manual fallback when automatic sending is blocked ============
+   Opens the admin's own mail client with the guest's email pre-filled. The QR
+   image can't be attached via a mailto: link (browsers don't support that), so
+   this is paired with a one-click QR download the admin attaches themselves. */
+function buildMailtoLink(ticket){
+  const subject = `Your ticket for ${EVENT.name}`;
+  const bodyLines = [
+    `Hi ${ticket.name},`,
+    '',
+    `Here's your admission pass for ${EVENT.name}.`,
+    `${EVENT.dateTime} · ${EVENT.venueName}`,
+    EVENT.venueMapLink ? `Directions: ${EVENT.venueMapLink}` : null,
+    '',
+    `Ticket code: ${ticket.id}`,
+    ticket.ticketTotal > 1 ? `(Ticket ${ticket.ticketIndex} of ${ticket.ticketTotal})` : null,
+    '',
+    'Your QR code is attached — show it at the door.',
+    '',
+    rulesPlainText()
+  ].filter(line => line !== null).join('\n');
+  const params = new URLSearchParams({ subject, body: bodyLines });
+  return `mailto:${encodeURIComponent(ticket.email)}?${params.toString()}`;
+}
+async function downloadTicketQr(ticket){
+  try{
+    const dataUrl = await generateQrDataUrl(ticket.id);
+    const a = document.createElement('a');
+    a.href = dataUrl; a.download = `ticket-${ticket.id}.png`; a.click();
+  }catch(e){
+    alert('Could not generate the QR image: ' + e.message);
+  }
+}
+
+/* ============ Scanner ============ */
+let html5QrCode = null, scanning = false, scanLock = false;
+document.getElementById('scan-toggle-btn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('scan-toggle-btn');
+  if(!scanning){
+    try{
+      html5QrCode = new Html5Qrcode("qr-reader");
+      await html5QrCode.start({facingMode:"environment"}, {fps:10, qrbox:240}, onScanSuccess, ()=>{});
+      scanning = true; btn.textContent = 'Stop scanner';
+    }catch(e){ alert("Could not access the camera. Grant camera permission and make sure you're on HTTPS."); }
+  } else {
+    try{ await html5QrCode.stop(); html5QrCode.clear(); }catch(e){}
+    scanning = false; btn.textContent = 'Start scanner';
+  }
+});
+async function onScanSuccess(decodedText){
+  if(scanLock) return; scanLock = true;
+  const id = decodedText.trim();
+  const ticket = await getRecord(TICKET_PREFIX+id);
+  if(!ticket){ showStatus(false, 'Not a valid ticket', "This code doesn't match any issued ticket."); }
+  else if(ticket.used){ showStatus(false, 'Already checked in', `${ticket.name} entered at ${new Date(ticket.usedAt).toLocaleTimeString()}.`); }
+  else{
+    ticket.used = true; ticket.usedAt = new Date().toISOString();
+    await setRecord(TICKET_PREFIX+id, ticket);
+    showStatus(true, `Welcome, ${ticket.name}`, 'Checked in successfully.');
+    prependLog(ticket);
+  }
+  setTimeout(()=>{ scanLock=false; document.getElementById('scan-status').classList.remove('show'); }, 2200);
+}
+function showStatus(valid, title, sub){
+  const el = document.getElementById('scan-status');
+  el.className = 'scan-status show ' + (valid?'valid':'invalid');
+  el.innerHTML = `${title}<span class="sub">${sub}</span>`;
+}
+function prependLog(ticket){
+  const log = document.getElementById('recent-log');
+  if(log.querySelector('.empty-note')) log.innerHTML = '';
+  const row = document.createElement('div');
+  row.className = 'entry-row';
+  row.innerHTML = `<span>${escapeHtml(ticket.name)}</span><span class="time">${new Date(ticket.usedAt).toLocaleTimeString()}</span>`;
+  log.prepend(row);
+}
+
+/* ============ Admin: Dashboard ============ */
+async function refreshDashboard(){
+  const tickets = await getAll(TICKET_PREFIX);
+  const requests = await getAll(REQUEST_PREFIX);
+  const pendingCount = requests.filter(r=>r.status==='pending').length;
+  const sold = tickets.length, entered = tickets.filter(t=>t.used).length;
+  document.getElementById('dash-sold').textContent = `${sold} / ${EVENT.maxGuests}`;
+  document.getElementById('dash-entered').textContent = entered;
+  document.getElementById('dash-remaining').textContent = sold - entered;
+  document.getElementById('dash-pending').textContent = pendingCount;
+
+  const list = document.getElementById('guest-list');
+  if(sold===0){ list.innerHTML = '<div class="empty-note">No tickets confirmed yet.</div>'; return; }
+  tickets.sort((a,b)=> new Date(b.purchasedAt)-new Date(a.purchasedAt));
+  list.innerHTML = tickets.map(t=>{
+    const indexNote = t.ticketTotal && t.ticketTotal > 1 ? ` (${t.ticketIndex} of ${t.ticketTotal})` : '';
+    return `
+    <div class="entry-row" style="flex-direction:column;align-items:stretch;gap:3px;">
+      <div style="display:flex;justify-content:space-between;">
+        <strong>${escapeHtml(t.name)}${indexNote} ${t.used?'✅':''}</strong>
+        <span class="time">${t.used ? 'Entered '+new Date(t.usedAt).toLocaleTimeString() : 'Not arrived'}</span>
+      </div>
+      <div class="meta">${escapeHtml(t.email||'—')} · ${escapeHtml(t.phone||'—')}</div>
+      <div class="meta">Ticket code: <span style="font-family:'IBM Plex Mono',monospace;">${escapeHtml(t.id)}</span></div>
+      <div class="meta">UTR/Ref: ${escapeHtml(t.upiref||'—')} · Purchased: ${new Date(t.purchasedAt).toLocaleString()}</div>
+      <div class="meta">Heard via: ${(t.sourceBands||[]).map(escapeHtml).join(', ') || '—'}</div>
+    </div>`;
+  }).join('');
+}
+document.getElementById('refresh-dash-btn').addEventListener('click', refreshDashboard);
+
+/* ============ Admin: export the full ticket record as CSV ============ */
+function csvEscape(v){
+  const s = (v===null||v===undefined) ? '' : String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+document.getElementById('export-csv-btn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('export-csv-btn');
+  btn.disabled = true; btn.textContent = 'Preparing…';
+  try{
+    const tickets = await getAll(TICKET_PREFIX);
+    tickets.sort((a,b)=> new Date(a.purchasedAt)-new Date(b.purchasedAt));
+    const headers = ['Ticket code','Name','Email','Phone','Ticket index','Ticket total',
+      'UTR/Ref','Purchased at','Used','Used at','Heard via','Request ID'];
+    const rows = tickets.map(t => [
+      t.id, t.name, t.email||'', t.phone||'', t.ticketIndex||1, t.ticketTotal||1,
+      t.upiref||'', t.purchasedAt||'', t.used ? 'Yes' : 'No', t.usedAt||'',
+      (t.sourceBands||[]).join('; '), t.requestId||''
+    ]);
+    const csv = [headers, ...rows].map(row => row.map(csvEscape).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    a.href = url; a.download = `${EVENT.name.replace(/[^a-z0-9]+/gi,'-')}-tickets-${stamp}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Export full record (CSV)';
+  }
+});
+</script>
+</body>
+</html>
