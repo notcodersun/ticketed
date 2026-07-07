@@ -34,15 +34,17 @@ Live mode is the normal URL without `?test=1`.
 Set a strong admin password before sharing the public URL:
 
 ```sh
-ADMIN_PASSWORD="use-a-long-random-password" npm start
+npm start
 ```
+
+Secrets are read from `.env`. This local checkout already has generated `ADMIN_PASSWORD` and `SESSION_SECRET` values in `.env`.
 
 If you do not set `ADMIN_PASSWORD`, the development fallback is `2026`. Do not use that for the real event link.
 
 Optional but recommended: set a stable session secret so admin sessions survive a server restart:
 
 ```sh
-ADMIN_PASSWORD="use-a-long-random-password" SESSION_SECRET="another-long-random-string" npm start
+SESSION_SECRET="another-long-random-string"
 ```
 
 The admin password is checked by the server. Successful login creates an HttpOnly session cookie. Guest browsers can submit payment verification requests and check their own status, but raw storage listing, ticket creation, approvals, check-in updates, dashboards, and CSV export require the admin session.
@@ -67,18 +69,15 @@ The app now tries the backend Nodemailer endpoint first and keeps EmailJS as a b
 
 To send real emails from the server, start with SMTP settings:
 
-```sh
-ADMIN_PASSWORD="use-a-long-random-password" \
-SESSION_SECRET="another-long-random-string" \
-SMTP_HOST="smtp.example.com" \
-SMTP_PORT="587" \
-SMTP_USER="smtp-user" \
-SMTP_PASS="smtp-password" \
-SMTP_FROM="M.U.M Tickets <tickets@example.com>" \
-npm start
+```text
+SMTP_HOST="smtp.example.com"
+SMTP_PORT="587"
+SMTP_USER="smtp-user"
+SMTP_PASS="smtp-password"
+SMTP_FROM="M.U.M Tickets <tickets@example.com>"
 ```
 
-If `SMTP_HOST` and `SMTP_FROM` are not set, the admin email log will show that Nodemailer is wired but skipped. That is expected for local feasibility testing.
+Put those values in `.env`, then run `npm start`. If `SMTP_HOST` and `SMTP_FROM` are not set, the admin email log will show that Nodemailer is wired but skipped. That is expected for local feasibility testing.
 
 ## Free Public URL With Cloudflare Quick Tunnel
 

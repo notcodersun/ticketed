@@ -4,6 +4,28 @@ const fs = require('fs/promises');
 const path = require('path');
 const nodemailer = require('nodemailer');
 
+function loadEnvFile(filePath = path.join(__dirname, '.env')) {
+  try {
+    const raw = require('fs').readFileSync(filePath, 'utf8');
+    raw.split(/\r?\n/).forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return;
+      const eq = trimmed.indexOf('=');
+      if (eq === -1) return;
+      const key = trimmed.slice(0, eq).trim();
+      let value = trimmed.slice(eq + 1).trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      if (key && process.env[key] === undefined) process.env[key] = value;
+    });
+  } catch (error) {
+    if (error.code !== 'ENOENT') console.warn(`Could not load .env: ${error.message}`);
+  }
+}
+
+loadEnvFile();
+
 const PORT = Number(process.env.PORT || 8000);
 const ROOT = __dirname;
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
