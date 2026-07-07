@@ -1,0 +1,12 @@
+{
+  "name": "ticketed",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Small event ticketing page with a shared Node storage backend.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

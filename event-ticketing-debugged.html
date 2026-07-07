@@ -358,20 +358,47 @@ if (window.emailjs && emailjsReady()) {
   emailjs.init({ publicKey: EMAILJS_CONFIG.publicKey });
 }
 
-/* Local browser fallback for Claude artifact storage.
-   The original app used window.storage, which only exists in some hosted
-   artifact environments. This shim lets the page run as a normal .html file. */
+/* Storage adapter.
+   When this page is served by server.js, records are shared through /api/storage
+   and saved on the hosting machine. If opened as a plain file/static page, it
+   falls back to this visitor's browser only. */
 if (!window.storage) {
+  const apiBase = `${location.origin}/api/storage`;
+  async function apiRequest(path = '', options = {}) {
+    const response = await fetch(apiBase + path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options
+    });
+    if (!response.ok) throw new Error(`Storage API failed: ${response.status}`);
+    if (response.status === 204) return null;
+    return response.json();
+  }
   window.storage = {
     async get(key) {
+      if (location.protocol !== 'file:') {
+        try { return await apiRequest('/' + encodeURIComponent(key)); }
+        catch(e) { console.warn('Shared storage unavailable; using local browser storage.', e); }
+      }
       const value = localStorage.getItem(key);
       return value === null ? null : { key, value };
     },
     async set(key, value) {
+      if (location.protocol !== 'file:') {
+        try {
+          return await apiRequest('/' + encodeURIComponent(key), {
+            method: 'PUT',
+            body: JSON.stringify({ value })
+          });
+        } catch(e) { console.warn('Shared storage unavailable; using local browser storage.', e); }
+      }
       localStorage.setItem(key, value);
       return { key, value };
     },
     async list(prefix) {
+      if (location.protocol !== 'file:') {
+        try { return await apiRequest('?prefix=' + encodeURIComponent(prefix)); }
+        catch(e) { console.warn('Shared storage unavailable; using local browser storage.', e); }
+      }
       const keys = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -380,6 +407,12 @@ if (!window.storage) {
       return { keys };
     },
     async delete(key) {
+      if (location.protocol !== 'file:') {
+        try {
+          await apiRequest('/' + encodeURIComponent(key), { method: 'DELETE' });
+          return;
+        } catch(e) { console.warn('Shared storage unavailable; using local browser storage.', e); }
+      }
       localStorage.removeItem(key);
     }
   };
@@ -467,23 +500,20 @@ document.getElementById('copy-upi-btn').addEventListener('click', ()=>{
   });
 });
 
-/* ============ Storage helpers (shared across all visitors) ============
+/* ============ Storage helpers ============
    IMPORTANT — read before relying on this for a real, paid event:
-   `window.storage` with shared=true has NO per-user authentication. Every
-   visitor's browser can call get/set/list/delete on these same keys directly
-   from devtools — the admin PIN only hides the *UI*, it does not protect the
-   underlying data. In practice that means a technically-inclined guest could,
-   without the PIN:
+   The included server.js backend gives every visitor shared storage, but this
+   is still a lightweight trust-based system. Every visitor's browser can call
+   the storage API directly from devtools — the admin PIN only hides the UI, it
+   does not fully protect the underlying data. In practice that means a
+   technically-inclined guest could, without the PIN:
      - list and read every registration/ticket (names, emails, phone numbers,
        UPI transaction references),
      - write a ticket record directly (i.e. forge a valid ticket without
        paying or being approved),
      - or flip a used ticket back to unused to re-enter.
-   There is no fix for this available within a client-only artifact — it
-   would require a real backend that authenticates the admin server-side
-   before allowing writes/reads (e.g. a small serverless function + database
-   with an actual auth check). Fine for a low-stakes, trusted-crowd event;
-   not something to rely on for anything adversarial or high-value. */
+   This is fine for a low-stakes, trusted-crowd event. For a public/adversarial
+   event, the API should enforce server-side auth for admin actions. */
 async function getRecord(key){
   try{ const r = await window.storage.get(key, true); return r ? JSON.parse(r.value) : null; }
   catch(e){ return null; }
