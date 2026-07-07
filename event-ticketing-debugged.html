@@ -254,8 +254,8 @@
   <section id="view-admin" class="view">
     <div class="card" id="admin-lock-card">
       <h2>Admin access</h2>
-      <p class="hint">Enter the organizer PIN to approve payments, scan guests in, and view the dashboard.</p>
-      <input type="password" id="admin-pin-input" placeholder="PIN">
+      <p class="hint">Enter the organizer admin password to approve payments, scan guests in, and view the dashboard.</p>
+      <input type="password" id="admin-pin-input" placeholder="Admin password">
       <button class="primary" id="admin-unlock-btn">Unlock</button>
       <div id="admin-pin-error"></div>
     </div>
@@ -312,7 +312,7 @@
     </div>
   </section>
 
-  <div class="config-note">Payments are verified manually by the organizer against their UPI app — this page does not move money itself. The admin PIN is a soft gate against casual guests wandering into staff views, not real security.</div>
+  <div class="config-note">Payments are verified manually by the organizer against their UPI app — this page does not move money itself. Admin tools require a server-issued session cookie after password login.</div>
 </div>
 
 <script>
@@ -325,8 +325,7 @@ const EVENT = {
   price: 199.69,
   maxGuests: 70,
   upiId: "tarsannay24@oksbi",
-  upiPhone: "+91 90641 50021",
-  adminPin: "2026"
+  upiPhone: "+91 90641 50021"
 };
 const formatMoney = (amount) => '₹' + Number(amount).toLocaleString('en-IN', {
   minimumFractionDigits: Number.isInteger(Number(amount)) ? 0 : 2,
@@ -369,7 +368,11 @@ if (!window.storage) {
       headers: { 'Content-Type': 'application/json' },
       ...options
     });
-    if (!response.ok) throw new Error(`Storage API failed: ${response.status}`);
+    if (!response.ok) {
+      const error = new Error(`Storage API failed: ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
     if (response.status === 204) return null;
     return response.json();
   }
@@ -377,7 +380,10 @@ if (!window.storage) {
     async get(key) {
       if (location.protocol !== 'file:') {
         try { return await apiRequest('/' + encodeURIComponent(key)); }
-        catch(e) { console.warn('Shared storage unavailable; using local browser storage.', e); }
+        catch(e) {
+          if(e.status) throw e;
+          console.warn('Shared storage unavailable; using local browser storage.', e);
+        }
       }
       const value = localStorage.getItem(key);
       return value === null ? null : { key, value };
@@ -389,7 +395,10 @@ if (!window.storage) {
             method: 'PUT',
             body: JSON.stringify({ value })
           });
-        } catch(e) { console.warn('Shared storage unavailable; using local browser storage.', e); }
+        } catch(e) {
+          if(e.status) throw e;
+          console.warn('Shared storage unavailable; using local browser storage.', e);
+        }
       }
       localStorage.setItem(key, value);
       return { key, value };
@@ -397,7 +406,10 @@ if (!window.storage) {
     async list(prefix) {
       if (location.protocol !== 'file:') {
         try { return await apiRequest('?prefix=' + encodeURIComponent(prefix)); }
-        catch(e) { console.warn('Shared storage unavailable; using local browser storage.', e); }
+        catch(e) {
+          if(e.status) throw e;
+          console.warn('Shared storage unavailable; using local browser storage.', e);
+        }
       }
       const keys = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -411,7 +423,10 @@ if (!window.storage) {
         try {
           await apiRequest('/' + encodeURIComponent(key), { method: 'DELETE' });
           return;
-        } catch(e) { console.warn('Shared storage unavailable; using local browser storage.', e); }
+        } catch(e) {
+          if(e.status) throw e;
+          console.warn('Shared storage unavailable; using local browser storage.', e);
+        }
       }
       localStorage.removeItem(key);
     }
@@ -531,6 +546,32 @@ async function getAll(prefix){
   for(const k of keys){ const r = await getRecord(k); if(r) out.push(r); }
   return out;
 }
+async function appApi(path, options = {}){
+  const response = await fetch(path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options
+  });
+  const data = response.status === 204 ? null : await response.json().catch(()=>null);
+  if(!response.ok){
+    const error = new Error((data && data.error) || `Request failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+async function fetchPublicCapacity(){
+  const data = await appApi(`/api/public/capacity?prefix=${encodeURIComponent(TICKET_PREFIX)}`);
+  return Number(data.sold || 0);
+}
+async function fetchPublicStatus(query){
+  return appApi(`/api/public/status?requestPrefix=${encodeURIComponent(REQUEST_PREFIX)}&ticketPrefix=${encodeURIComponent(TICKET_PREFIX)}&q=${encodeURIComponent(query)}`);
+}
+function unlockAdminPanel(){
+  adminUnlocked = true;
+  document.getElementById('admin-lock-card').style.display = 'none';
+  document.getElementById('admin-panel').style.display = 'block';
+  refreshApprovals(); refreshDashboard();
+}
 function genId(len){
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let s=''; for(let i=0;i<len;i++) s += chars[Math.floor(Math.random()*chars.length)];
@@ -570,17 +611,28 @@ if(!ADMIN_MODE){
 
 /* ============ Admin unlock + sub-nav ============ */
 let adminUnlocked = false;
-document.getElementById('admin-unlock-btn').addEventListener('click', ()=>{
+document.getElementById('admin-unlock-btn').addEventListener('click', async ()=>{
   const val = document.getElementById('admin-pin-input').value;
-  if(val === EVENT.adminPin){
-    adminUnlocked = true;
-    document.getElementById('admin-lock-card').style.display = 'none';
-    document.getElementById('admin-panel').style.display = 'block';
-    refreshApprovals(); refreshDashboard();
-  } else {
-    document.getElementById('admin-pin-error').innerHTML = '<div class="banner rust">Incorrect PIN.</div>';
+  const btn = document.getElementById('admin-unlock-btn');
+  btn.disabled = true; btn.textContent = 'Unlocking...';
+  try{
+    await appApi('/api/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ password: val })
+    });
+    document.getElementById('admin-pin-error').innerHTML = '';
+    unlockAdminPanel();
+  } catch(e){
+    document.getElementById('admin-pin-error').innerHTML = '<div class="banner rust">Incorrect admin password.</div>';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Unlock';
   }
 });
+if(ADMIN_MODE){
+  appApi('/api/admin/me')
+    .then(data=>{ if(data.authenticated) unlockAdminPanel(); })
+    .catch(()=>{});
+}
 document.querySelectorAll('nav.subtabs button').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('nav.subtabs button').forEach(b=>b.classList.remove('active'));
@@ -594,8 +646,9 @@ document.querySelectorAll('nav.subtabs button').forEach(btn=>{
 
 /* ============ Capacity ============ */
 async function refreshCapacity(){
-  const tickets = await getAll(TICKET_PREFIX);
-  const sold = tickets.length;
+  const sold = ADMIN_MODE && adminUnlocked
+    ? (await getAll(TICKET_PREFIX)).length
+    : await fetchPublicCapacity();
   document.getElementById('capacity-display').textContent = `${sold} / ${EVENT.maxGuests}`;
   document.getElementById('capacity-fill').style.width = Math.min(100,(sold/EVENT.maxGuests)*100)+'%';
   const remaining = EVENT.maxGuests - sold;
@@ -670,24 +723,8 @@ document.getElementById('status-check-btn').addEventListener('click', async ()=>
   const resultEl = document.getElementById('status-result');
   if(!q){ resultEl.innerHTML = '<div class="banner amber">Enter a reference ID or email.</div>'; return; }
 
-  let request = await getRecord(REQUEST_PREFIX+q.toUpperCase());
-  if(!request){
-    const all = await getAll(REQUEST_PREFIX);
-    const matches = all.filter(r => (r.email||'').toLowerCase() === q.toLowerCase());
-    if(matches.length){
-      // A guest can end up with more than one request under the same email
-      // (resubmitted after a rejection, submitted twice by accident, etc).
-      // Show the most useful one: approved beats pending beats rejected;
-      // ties broken by most recent submission.
-      const statusRank = { approved: 2, pending: 1, rejected: 0 };
-      matches.sort((a,b)=>{
-        const rankDiff = (statusRank[b.status] ?? 0) - (statusRank[a.status] ?? 0);
-        if(rankDiff !== 0) return rankDiff;
-        return new Date(b.submittedAt) - new Date(a.submittedAt);
-      });
-      request = matches[0];
-    }
-  }
+  const status = await fetchPublicStatus(q);
+  const request = status.request;
   if(!request){ resultEl.innerHTML = '<div class="banner rust">No matching submission found.</div>'; return; }
 
   if(request.status === 'pending'){
@@ -695,16 +732,14 @@ document.getElementById('status-check-btn').addEventListener('click', async ()=>
   } else if(request.status === 'rejected'){
     resultEl.innerHTML = `<div class="banner rust">Payment could not be verified.${request.note ? ' Note: '+escapeHtml(request.note) : ' Please contact the organizer.'}</div>`;
   } else if(request.status === 'approved'){
-    const ticketIds = request.ticketIds && request.ticketIds.length ? request.ticketIds : (request.ticketId ? [request.ticketId] : []);
+    const tickets = status.tickets || [];
     resultEl.innerHTML = '';
-    for(const tid of ticketIds){
-      const ticket = await getRecord(TICKET_PREFIX+tid);
-      if(!ticket) continue;
+    for(const ticket of tickets){
       const holder = document.createElement('div');
       resultEl.appendChild(holder);
       renderTicketStub(ticket, holder);
     }
-    if(ticketIds.length === 0){
+    if(tickets.length === 0){
       resultEl.innerHTML = '<div class="banner amber">Approved, but no tickets were found — contact the organizer.</div>';
     }
   }

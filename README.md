@@ -29,6 +29,24 @@ http://localhost:8000/admin.html?test=1
 
 Live mode is the normal URL without `?test=1`.
 
+## Admin Security
+
+Set a strong admin password before sharing the public URL:
+
+```sh
+ADMIN_PASSWORD="use-a-long-random-password" npm start
+```
+
+If you do not set `ADMIN_PASSWORD`, the development fallback is `2026`. Do not use that for the real event link.
+
+Optional but recommended: set a stable session secret so admin sessions survive a server restart:
+
+```sh
+ADMIN_PASSWORD="use-a-long-random-password" SESSION_SECRET="another-long-random-string" npm start
+```
+
+The admin password is checked by the server. Successful login creates an HttpOnly session cookie. Guest browsers can submit payment verification requests and check their own status, but raw storage listing, ticket creation, approvals, check-in updates, dashboards, and CSV export require the admin session.
+
 ## Free Public URL With Cloudflare Quick Tunnel
 
 Keep the server running:
@@ -51,4 +69,4 @@ Important notes:
 - The URL works only while this computer is on, online, and both commands are running.
 - Quick Tunnel URLs are temporary and can change when restarted.
 - Ticket and request data is saved on this machine in `data/storage.json`.
-- This is still a lightweight trust-based app. The admin PIN hides the staff UI, but the API is not hardened against technical abuse.
+- Use a strong `ADMIN_PASSWORD` before sharing the staff URL.
