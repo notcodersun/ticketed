@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -199,7 +199,7 @@
       <p class="hint">Set your ticket count below, then pay the <b>total shown</b> via any UPI app and note the transaction/UTR reference number — you'll need it in Step 2.</p>
       <div class="row" style="border:none;padding-bottom:6px;">
         <span class="label">Tickets for this QR</span>
-        <span class="value"><input type="number" id="upi-qty" min="1" max="8" value="1" style="width:64px;padding:6px 8px;text-align:center;"></span>
+        <span class="value"><input type="text" id="upi-qty" inputmode="numeric" pattern="[0-9]*" autocomplete="off" value="1" style="width:64px;padding:6px 8px;text-align:center;"></span>
       </div>
       <div class="upi-box">
         <div class="qr-wrap" id="upi-qr" title="upi://pay?pa=tarsannay24%40oksbi&amp;pn=M.U.M&amp;am=399.38&amp;cu=INR&amp;tn=Ticket%20x2%20-%20M.U.M"><canvas width="150" height="150" style="display: none;"></canvas><img src="data:image/png;base64,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" style="display: block;"></div>
@@ -506,10 +506,11 @@ function renderUpiQr(qty){
 }
 function readQty({ commit = false } = {}){
   const el = document.getElementById('upi-qty');
-  let v = parseInt(el.value, 10);
+  const digits = String(el.value || '').replace(/\D/g, '');
+  let v = parseInt(digits, 10);
   if(!Number.isFinite(v)) v = 1;
   v = Math.min(8, Math.max(1, v));
-  if(commit) el.value = v;
+  if(commit) el.value = String(v);
   return v;
 }
 function currentQty(){
@@ -517,6 +518,8 @@ function currentQty(){
 }
 const upiQtyInput = document.getElementById('upi-qty');
 upiQtyInput.addEventListener('input', ()=>{
+  const digits = upiQtyInput.value.replace(/\D/g, '');
+  if(upiQtyInput.value !== digits) upiQtyInput.value = digits;
   renderUpiQr(readQty());
   refreshCapacity();
 });
@@ -524,7 +527,7 @@ upiQtyInput.addEventListener('blur', ()=>{
   renderUpiQr(currentQty());
   refreshCapacity();
 });
-renderUpiQr(readQty());
+renderUpiQr(currentQty());
 
 document.getElementById('copy-upi-btn').addEventListener('click', ()=>{
   navigator.clipboard.writeText(EVENT.upiId).then(()=>{
