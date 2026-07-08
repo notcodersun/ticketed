@@ -520,7 +520,7 @@ upiQtyInput.addEventListener('input', ()=>{
   const digits = upiQtyInput.value.replace(/\D/g, '');
   if(upiQtyInput.value !== digits) upiQtyInput.value = digits;
   renderUpiQr(readQty({ fallback: 0 }));
-  refreshCapacity({ commitQty: false });
+  refreshCapacity();
 });
 upiQtyInput.addEventListener('blur', ()=>{
   renderUpiQr(currentQty());
@@ -663,14 +663,14 @@ document.querySelectorAll('nav.subtabs button').forEach(btn=>{
 });
 
 /* ============ Capacity ============ */
-async function refreshCapacity({ commitQty = true } = {}){
+async function refreshCapacity(){
   const sold = ADMIN_MODE && adminUnlocked
     ? (await getAll(TICKET_PREFIX)).length
     : await fetchPublicCapacity();
   document.getElementById('capacity-display').textContent = `${sold} / ${EVENT.maxGuests}`;
   document.getElementById('capacity-fill').style.width = Math.min(100,(sold/EVENT.maxGuests)*100)+'%';
   const remaining = EVENT.maxGuests - sold;
-  const qty = commitQty ? currentQty() : readQty({ fallback: 0 });
+  const qty = readQty({ fallback: 0 });
   const wontFit = remaining < qty || remaining <= 0;
   document.getElementById('submit-btn').disabled = wontFit;
   document.getElementById('sold-out-msg').style.display = wontFit ? 'block':'none';
@@ -687,7 +687,7 @@ document.getElementById('submit-btn').addEventListener('click', async ()=>{
   const email = document.getElementById('reg-email').value.trim();
   const phone = document.getElementById('reg-phone').value.trim();
   const upiref = document.getElementById('reg-upiref').value.trim();
-  const qty = commitQty ? currentQty() : readQty({ fallback: 0 });
+  const qty = currentQty();
   const selectedBand = document.querySelector('.source-band:checked');
   const sourceBand = selectedBand ? selectedBand.value : null;
   if(!name || !email || !upiref){ alert('Please fill in your name, email, and UPI transaction reference.'); return; }
