@@ -504,24 +504,23 @@ function renderUpiQr(qty){
     width: 150, height: 150, colorDark:'#2A2721', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.M
   });
 }
-function readQty({ commit = false } = {}){
+function readQty({ commit = false, fallback = 1 } = {}){
   const el = document.getElementById('upi-qty');
   const digits = String(el.value || '').replace(/\D/g, '');
   let v = parseInt(digits, 10);
-  if(!Number.isFinite(v)) v = 1;
-  v = Math.min(8, Math.max(1, v));
+  if(!Number.isFinite(v) || v < 1) v = fallback;
   if(commit) el.value = String(v);
   return v;
 }
 function currentQty(){
-  return readQty({ commit: true });
+  return readQty({ commit: true, fallback: 1 });
 }
 const upiQtyInput = document.getElementById('upi-qty');
 upiQtyInput.addEventListener('input', ()=>{
   const digits = upiQtyInput.value.replace(/\D/g, '');
   if(upiQtyInput.value !== digits) upiQtyInput.value = digits;
-  renderUpiQr(readQty());
-  refreshCapacity();
+  renderUpiQr(readQty({ fallback: 0 }));
+  refreshCapacity({ commitQty: false });
 });
 upiQtyInput.addEventListener('blur', ()=>{
   renderUpiQr(currentQty());
@@ -664,14 +663,14 @@ document.querySelectorAll('nav.subtabs button').forEach(btn=>{
 });
 
 /* ============ Capacity ============ */
-async function refreshCapacity(){
+async function refreshCapacity({ commitQty = true } = {}){
   const sold = ADMIN_MODE && adminUnlocked
     ? (await getAll(TICKET_PREFIX)).length
     : await fetchPublicCapacity();
   document.getElementById('capacity-display').textContent = `${sold} / ${EVENT.maxGuests}`;
   document.getElementById('capacity-fill').style.width = Math.min(100,(sold/EVENT.maxGuests)*100)+'%';
   const remaining = EVENT.maxGuests - sold;
-  const qty = currentQty();
+  const qty = commitQty ? currentQty() : readQty({ fallback: 0 });
   const wontFit = remaining < qty || remaining <= 0;
   document.getElementById('submit-btn').disabled = wontFit;
   document.getElementById('sold-out-msg').style.display = wontFit ? 'block':'none';
@@ -688,7 +687,7 @@ document.getElementById('submit-btn').addEventListener('click', async ()=>{
   const email = document.getElementById('reg-email').value.trim();
   const phone = document.getElementById('reg-phone').value.trim();
   const upiref = document.getElementById('reg-upiref').value.trim();
-  const qty = currentQty();
+  const qty = commitQty ? currentQty() : readQty({ fallback: 0 });
   const selectedBand = document.querySelector('.source-band:checked');
   const sourceBand = selectedBand ? selectedBand.value : null;
   if(!name || !email || !upiref){ alert('Please fill in your name, email, and UPI transaction reference.'); return; }
