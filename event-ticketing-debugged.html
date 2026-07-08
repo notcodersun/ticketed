@@ -48,35 +48,69 @@
     width:min(1120px, 145vw);
     aspect-ratio:980/851;
     transform:translateX(-50%);
-    opacity:.22;
-    filter:contrast(1.08) saturate(1.08);
+    opacity:.42;
+    filter:contrast(1.55) saturate(1.18) brightness(.82) drop-shadow(0 18px 28px rgba(42,39,33,.18));
   }
   .poster-creature img{width:100%;height:100%;object-fit:contain;display:block;}
   .poster-creature .eye-wobble{
     position:absolute;
-    width:6.8%;
-    aspect-ratio:1.25;
+    width:7.2%;
+    aspect-ratio:1.18;
     border-radius:50%;
-    background:radial-gradient(circle at 55% 45%, rgba(255,245,110,.95) 0 11%, rgba(255,83,35,.9) 28%, rgba(255,83,35,.12) 62%, transparent 70%);
-    mix-blend-mode:screen;
-    opacity:.65;
-    animation:eyeWobble 3.6s ease-in-out infinite;
+    background:
+      radial-gradient(circle at 34% 26%, rgba(255,255,210,.95) 0 7%, transparent 8%),
+      radial-gradient(circle at 56% 53%, rgba(32,25,20,.96) 0 19%, rgba(32,25,20,.5) 20% 25%, transparent 26%),
+      radial-gradient(ellipse at 50% 50%, #ff6a28 0 42%, #cf351f 58%, rgba(113,24,17,.45) 72%, transparent 74%);
+    box-shadow:inset -9px -12px 18px rgba(35,18,12,.45), inset 7px 6px 11px rgba(255,244,126,.26), 0 0 20px rgba(255,82,35,.36);
+    mix-blend-mode:multiply;
+    opacity:.92;
+    transform-style:preserve-3d;
+    animation:eyeWobble3d 3.2s ease-in-out infinite;
   }
-  .poster-creature .eye-a{left:7.2%;top:33.3%;animation-delay:-.4s;}
-  .poster-creature .eye-b{left:30.6%;top:35.2%;animation-delay:-1.7s;}
-  .poster-creature .eye-c{right:30.6%;top:35.2%;animation-delay:-.9s;}
-  .poster-creature .eye-d{right:7.2%;top:33.3%;animation-delay:-2.4s;}
-  @keyframes eyeWobble{
-    0%,100%{transform:translate3d(0,0,0) rotate(0deg) scale(1);}
-    22%{transform:translate3d(5px,-3px,0) rotate(4deg) scale(1.04);}
-    48%{transform:translate3d(-4px,4px,0) rotate(-5deg) scale(.98);}
-    74%{transform:translate3d(3px,2px,0) rotate(3deg) scale(1.02);}
+  .poster-creature .eye-wobble::before{
+    content:'';
+    position:absolute;
+    left:38%;top:34%;
+    width:30%;height:36%;
+    border-radius:50%;
+    background:radial-gradient(circle at 45% 40%, #17110d 0 46%, rgba(23,17,13,.75) 58%, transparent 62%);
+    box-shadow:0 2px 8px rgba(0,0,0,.35);
+    animation:pupilWobble 1.85s ease-in-out infinite;
+  }
+  .poster-creature .eye-wobble::after{
+    content:'';
+    position:absolute;
+    left:25%;top:18%;
+    width:20%;height:16%;
+    border-radius:50%;
+    background:rgba(255,255,205,.75);
+    filter:blur(.5px);
+    animation:shineWobble 2.4s ease-in-out infinite;
+  }
+  .poster-creature .eye-a{left:7.0%;top:33.0%;animation-delay:-.4s;}
+  .poster-creature .eye-b{left:30.4%;top:35.1%;animation-delay:-1.7s;}
+  .poster-creature .eye-c{right:30.4%;top:35.1%;animation-delay:-.9s;}
+  .poster-creature .eye-d{right:7.0%;top:33.0%;animation-delay:-2.4s;}
+  @keyframes eyeWobble3d{
+    0%,100%{transform:perspective(180px) rotateX(0deg) rotateY(0deg) translate3d(0,0,0) scale(1);}
+    20%{transform:perspective(180px) rotateX(9deg) rotateY(-13deg) translate3d(4px,-3px,8px) scale(1.04);}
+    48%{transform:perspective(180px) rotateX(-8deg) rotateY(12deg) translate3d(-5px,4px,4px) scale(.99);}
+    74%{transform:perspective(180px) rotateX(5deg) rotateY(8deg) translate3d(3px,2px,6px) scale(1.02);}
+  }
+  @keyframes pupilWobble{
+    0%,100%{transform:translate3d(0,0,6px) scale(1);}
+    30%{transform:translate3d(8px,-4px,10px) scale(1.05);}
+    62%{transform:translate3d(-7px,5px,8px) scale(.96);}
+  }
+  @keyframes shineWobble{
+    0%,100%{transform:translate3d(0,0,12px);opacity:.72;}
+    50%{transform:translate3d(7px,-3px,14px);opacity:.95;}
   }
   @media (max-width:520px){
-    .poster-creature .creature-stage{top:112px;width:188vw;opacity:.18;}
-    .poster-creature .eye-wobble{opacity:.52;}
+    .poster-creature .creature-stage{top:112px;width:188vw;opacity:.34;filter:contrast(1.48) saturate(1.16) brightness(.84) drop-shadow(0 12px 22px rgba(42,39,33,.16));}
+    .poster-creature .eye-wobble{opacity:.86;}
   }
-  @media (prefers-reduced-motion:reduce){.poster-creature .eye-wobble{animation:none;}}
+  @media (prefers-reduced-motion:reduce){.poster-creature .eye-wobble,.poster-creature .eye-wobble::before,.poster-creature .eye-wobble::after{animation:none;}}
   .app{max-width:640px;margin:0 auto;position:relative;z-index:1;}
   .brand{text-align:center;margin-bottom:22px;}
   .brand .eyebrow{
