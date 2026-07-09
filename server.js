@@ -30,6 +30,8 @@ const PORT = Number(process.env.PORT || 8000);
 const ROOT = __dirname;
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'storage.json');
+const EMAIL_LOG_PREFIX = 'email-log:';
+const TEST_EMAIL_LOG_PREFIX = 'test-email-log:';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || process.env.ADMIN_PIN || '2026';
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const SESSION_COOKIE = 'ticketed_admin';
@@ -189,6 +191,67 @@ function getMailTransport() {
     } : undefined
   });
   return mailTransport;
+}
+
+function summarizeEmailResult(result) {
+  const safe = result && typeof result === 'object' ? result : { sent: false, error: 'Unknown email result' };
+  return {
+    sent: Boolean(safe.sent),
+    skipped: Boolean(safe.skipped),
+    provider: safe.provider || null,
+    messageId: safe.messageId || null,
+    reason: safe.reason || null,
+    error: safe.error || null,
+    networkBlocked: Boolean(safe.networkBlocked)
+  };
+}
+
+function emailLogPrefixForTicketPrefix(ticketPrefix) {
+  return ticketPrefix === 'test-ticket:' ? TEST_EMAIL_LOG_PREFIX : EMAIL_LOG_PREFIX;
+}
+
+function emailLogKey(prefix, ticketId) {
+  return `${prefix}${new Date().toISOString()}:${ticketId}:${crypto.randomBytes(3).toString('hex')}`;
+}
+
+function parseStoreRecord(value) {
+  try { return JSON.parse(value); } catch { return null; }
+}
+
+function emailLogEntryFor(ticket, result, meta = {}) {
+  return {
+    at: new Date().toISOString(),
+    ticketId: ticket.id,
+    ticketCode: ticket.id,
+    name: ticket.name || '',
+    email: ticket.email || '',
+    ticketIndex: ticket.ticketIndex || 1,
+    ticketTotal: ticket.ticketTotal || 1,
+    requestId: ticket.requestId || null,
+    source: meta.source || 'manual',
+    result: summarizeEmailResult(result)
+  };
+}
+
+async function sendAndRecordTicketEmail(store, ticketPrefix, ticket, meta = {}) {
+  let result;
+  try {
+    result = await sendTicketEmailWithNodemailer(ticket);
+  } catch (error) {
+    result = { sent: false, error: error && error.message ? error.message : String(error) };
+  }
+  const prefix = emailLogPrefixForTicketPrefix(ticketPrefix);
+  const entry = emailLogEntryFor(ticket, result, meta);
+  store[emailLogKey(prefix, ticket.id)] = JSON.stringify(entry);
+  return { result, entry };
+}
+
+function hasSuccessfulEmailLog(store, ticketId, logPrefix) {
+  return Object.entries(store).some(([key, value]) => {
+    if (!key.startsWith(logPrefix)) return false;
+    const entry = parseStoreRecord(value);
+    return entry && entry.ticketId === ticketId && entry.result && entry.result.sent;
+  });
 }
 
 async function sendTicketEmailWithNodemailer(ticket) {
@@ -384,8 +447,35 @@ async function handleAdmin(req, res, url) {
       sendError(res, 500, 'Ticket record is corrupted');
       return;
     }
-    const result = await sendTicketEmailWithNodemailer(ticket);
-    sendJson(res, 200, result);
+    const { result, entry } = await sendAndRecordTicketEmail(store, ticketPrefix, ticket, { source: 'single-ticket' });
+    await writeStore(store);
+    sendJson(res, 200, { ...result, logEntry: entry });
+    return;
+  }
+
+  if (url.pathname === '/api/admin/send-approved-emails' && req.method === 'POST') {
+    if (!isAdmin(req)) {
+      sendError(res, 401, 'Admin session required');
+      return;
+    }
+    const body = await readJsonBody(req);
+    const ticketPrefix = body.ticketPrefix === 'test-ticket:' ? 'test-ticket:' : 'ticket:';
+    const onlyMissing = body.onlyMissing !== false;
+    const store = await readStore();
+    const logPrefix = emailLogPrefixForTicketPrefix(ticketPrefix);
+    const tickets = Object.entries(store)
+      .filter(([key]) => key.startsWith(ticketPrefix))
+      .map(([, value]) => parseStoreRecord(value))
+      .filter((ticket) => ticket && ticket.id && ticket.email)
+      .filter((ticket) => !onlyMissing || !hasSuccessfulEmailLog(store, ticket.id, logPrefix));
+
+    const attempts = [];
+    for (const ticket of tickets) {
+      const { result, entry } = await sendAndRecordTicketEmail(store, ticketPrefix, ticket, { source: onlyMissing ? 'approved-missing' : 'approved-resend' });
+      attempts.push({ ticketId: ticket.id, email: ticket.email || '', result, logEntry: entry });
+    }
+    await writeStore(store);
+    sendJson(res, 200, { attempted: attempts.length, onlyMissing, attempts });
     return;
   }
 
