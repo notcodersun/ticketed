@@ -982,6 +982,44 @@ function normalizeEmailEntry(entry){
     result
   };
 }
+function emailLogStorageKey(ticketId){
+  return `${EMAIL_LOG_PREFIX}${new Date().toISOString()}:${ticketId}:${Math.random().toString(16).slice(2,8)}`;
+}
+function emailLogEntryForClient(ticket, result, source = 'client-emailjs'){
+  return {
+    at: new Date().toISOString(),
+    ticketId: ticket.id,
+    ticketCode: ticket.id,
+    name: ticket.name || '',
+    email: ticket.email || '',
+    ticketIndex: ticket.ticketIndex || 1,
+    ticketTotal: ticket.ticketTotal || 1,
+    requestId: ticket.requestId || null,
+    source,
+    result: {
+      sent: Boolean(result.sent),
+      skipped: Boolean(result.skipped),
+      provider: result.provider || (result.sent ? 'emailjs' : null),
+      messageId: result.messageId || null,
+      reason: result.reason || null,
+      error: result.error || null,
+      networkBlocked: Boolean(result.networkBlocked),
+      backendResult: result.backendResult || null,
+      backendError: result.backendError || null
+    }
+  };
+}
+async function persistClientEmailLog(ticket, result, source = 'client-emailjs'){
+  if(result && result.logEntry) return result.logEntry;
+  const entry = emailLogEntryForClient(ticket, result, source);
+  try{
+    await setRecord(emailLogStorageKey(ticket.id), entry);
+    result.logEntry = entry;
+  }catch(e){
+    console.warn('Could not save email log entry.', e);
+  }
+  return entry;
+}
 async function refreshEmailLog(){
   try{
     emailLog = (await getAll(EMAIL_LOG_PREFIX)).map(normalizeEmailEntry)
@@ -996,7 +1034,7 @@ function logEmailAttempt(ticket, result){
   const saved = result && result.logEntry ? normalizeEmailEntry(result.logEntry) : normalizeEmailEntry({ ticket, result, at: new Date() });
   emailLog.unshift(saved);
   renderEmailLog();
-  refreshEmailLog();
+  persistClientEmailLog(ticket, result).finally(refreshEmailLog);
 }
 async function sendMissingApprovedEmails(){
   const btn = document.getElementById('send-approved-emails-btn');
@@ -1007,8 +1045,19 @@ async function sendMissingApprovedEmails(){
       method:'POST',
       body: JSON.stringify({ ticketPrefix: TICKET_PREFIX, onlyMissing: true })
     });
+    let fallbackCount = 0;
+    for(const attempt of (response.attempts || [])){
+      if(attempt.result && attempt.result.sent) continue;
+      const ticket = await getRecord(TICKET_PREFIX + attempt.ticketId);
+      if(!ticket) continue;
+      const fallback = await sendTicketEmailViaEmailJs(ticket);
+      fallback.backendResult = attempt.result;
+      fallback.provider = fallback.sent ? 'emailjs' : (fallback.provider || 'emailjs');
+      await persistClientEmailLog(ticket, fallback, 'approved-emailjs-fallback');
+      fallbackCount++;
+    }
     const count = response.attempted || 0;
-    btn.textContent = count ? `Sent ${count} attempt${count===1?'':'s'}` : 'No missing emails';
+    btn.textContent = count ? `Attempted ${count}${fallbackCount ? `, EmailJS ${fallbackCount}` : ''}` : 'No missing emails';
     await refreshEmailLog();
   }catch(e){
     btn.textContent = 'Send failed';
@@ -1168,10 +1217,18 @@ async function sendTicketEmail(ticket){
       method: 'POST',
       body: JSON.stringify({ ticketId: ticket.id, ticketPrefix: TICKET_PREFIX })
     });
-    return result;
+    if(result.sent) return result;
+    console.warn('Backend email did not send; falling back to EmailJS.', result);
+    const fallback = await sendTicketEmailViaEmailJs(ticket);
+    fallback.backendResult = result;
+    fallback.provider = fallback.sent ? 'emailjs' : (fallback.provider || 'emailjs');
+    return fallback;
   }catch(e){
     console.warn('Backend email send failed; falling back to EmailJS.', e);
-    return sendTicketEmailViaEmailJs(ticket);
+    const fallback = await sendTicketEmailViaEmailJs(ticket);
+    fallback.backendError = e.message || String(e);
+    fallback.provider = fallback.sent ? 'emailjs' : (fallback.provider || 'emailjs');
+    return fallback;
   }
 }
 
