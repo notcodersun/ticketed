@@ -207,8 +207,19 @@ function smtpConfigured() {
   return Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM);
 }
 
+function resendConfigured() {
+  return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+}
+
 function smtpCcRecipients() {
   return String(process.env.SMTP_CC || '42sannay@gmail.com')
+    .split(',')
+    .map((email) => email.trim())
+    .filter(Boolean);
+}
+
+function emailCcRecipients() {
+  return String(process.env.EMAIL_CC || process.env.SMTP_CC || '42sannay@gmail.com')
     .split(',')
     .map((email) => email.trim())
     .filter(Boolean);
@@ -292,7 +303,7 @@ function emailLogEntryFor(ticket, result, meta = {}) {
 async function sendAndRecordTicketEmail(store, ticketPrefix, ticket, meta = {}) {
   let result;
   try {
-    result = await sendTicketEmailWithNodemailer(ticket);
+    result = await sendTicketEmail(ticket);
   } catch (error) {
     result = { sent: false, error: error && error.message ? error.message : String(error) };
   }
@@ -310,6 +321,43 @@ function hasSuccessfulEmailLog(store, ticketId, logPrefix) {
   });
 }
 
+async function fetchQrAttachment(ticket) {
+  const qrUrl = buildQrImageUrl(ticket.id, 220);
+  const response = await fetch(qrUrl);
+  if (!response.ok) {
+    throw new Error(`QR image fetch failed with ${response.status}`);
+  }
+  const content = Buffer.from(await response.arrayBuffer());
+  return {
+    filename: `ticket-${ticket.id}-qr.png`,
+    content,
+    contentBase64: content.toString('base64'),
+    contentType: 'image/png',
+    url: qrUrl
+  };
+}
+
+function ticketEmailText(ticket) {
+  const qrUrl = buildQrImageUrl(ticket.id, 220);
+  return [
+    `Hi ${ticket.name || 'there'},`,
+    '',
+    `Here is your admission pass for ${SERVER_EVENT.name}.`,
+    `${SERVER_EVENT.dateTime} - ${SERVER_EVENT.venueName}`,
+    `Ticket code: ${ticket.id}`,
+    `Ticket QR: ${qrUrl}`,
+    '',
+    rulesPlainText()
+  ].join('\n');
+}
+
+async function sendTicketEmail(ticket) {
+  if (resendConfigured()) {
+    return sendTicketEmailWithResend(ticket);
+  }
+  return sendTicketEmailWithNodemailer(ticket);
+}
+
 async function sendTicketEmailWithNodemailer(ticket) {
   const recipientEmail = String(ticket.email || '').trim();
   if (!recipientEmail) {
@@ -322,13 +370,20 @@ async function sendTicketEmailWithNodemailer(ticket) {
     };
   }
   const html = await renderEmailHtml(ticket);
+  const qrAttachment = await fetchQrAttachment(ticket);
   const message = {
     from: process.env.SMTP_FROM,
     to: recipientEmail,
-    cc: smtpCcRecipients(),
+    cc: emailCcRecipients(),
     subject: `Your ticket for ${SERVER_EVENT.name}`,
     html,
-    text: [
+    text: ticketEmailText(ticket),
+    attachments: [{
+      filename: qrAttachment.filename,
+      content: qrAttachment.content,
+      contentType: qrAttachment.contentType
+    }]
+    /*
       `Hi ${ticket.name || 'there'},`,
       '',
       `Here is your admission pass for ${SERVER_EVENT.name}.`,
@@ -337,6 +392,8 @@ async function sendTicketEmailWithNodemailer(ticket) {
       '',
       rulesPlainText()
     ].join('\n')
+  };
+    */
   };
   let info;
   try {
@@ -347,6 +404,43 @@ async function sendTicketEmailWithNodemailer(ticket) {
     info = await fallback.sendMail(message);
   }
   return { sent: true, provider: 'nodemailer', messageId: info.messageId };
+}
+
+async function sendTicketEmailWithResend(ticket) {
+  const recipientEmail = String(ticket.email || '').trim();
+  if (!recipientEmail) {
+    return { sent: false, error: 'This ticket has no email address on file.' };
+  }
+  const html = await renderEmailHtml(ticket);
+  const qrAttachment = await fetchQrAttachment(ticket);
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: process.env.EMAIL_FROM,
+      to: [recipientEmail],
+      cc: emailCcRecipients(),
+      subject: `Your ticket for ${SERVER_EVENT.name}`,
+      html,
+      text: ticketEmailText(ticket),
+      attachments: [{
+        filename: qrAttachment.filename,
+        content: qrAttachment.contentBase64
+      }]
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      sent: false,
+      provider: 'resend',
+      error: payload.message || payload.error || `Resend failed with ${response.status}`
+    };
+  }
+  return { sent: true, provider: 'resend', messageId: payload.id || null };
 }
 
 function cookieOptions(req, maxAge) {

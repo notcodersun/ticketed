@@ -86,11 +86,20 @@ In EmailJS, open the ticket template, switch to the HTML/source editor, and past
 
 Set the template's recipient/to email field to `{{to_email}}`.
 
-## Server-Side Email With Nodemailer
+## Server-Side Ticket Email
 
-The app now tries the backend Nodemailer endpoint first and keeps EmailJS as a browser fallback.
+The app sends ticket emails from the backend and records every attempt in the admin email log.
+The email QR is generated from the same ticket code used by the check-status section, and the QR PNG is attached to the email.
 
-To send real emails from the server, start with SMTP settings:
+Use Resend when Render blocks Gmail SMTP:
+
+```text
+RESEND_API_KEY="re_..."
+EMAIL_FROM="M.U.M Tickets <myth.official.music7@gmail.com>"
+EMAIL_CC="42sannay@gmail.com"
+```
+
+Or use SMTP/Nodemailer:
 
 ```text
 SMTP_HOST="smtp.example.com"
@@ -101,7 +110,7 @@ SMTP_FROM="M.U.M Tickets <myth.official.music7@gmail.com>"
 SMTP_CC="42sannay@gmail.com"
 ```
 
-Put those values in `.env`, then run `npm start`. If `SMTP_HOST` and `SMTP_FROM` are not set, the admin email log will show that Nodemailer is wired but skipped. That is expected for local feasibility testing.
+Put those values in `.env`, then run `npm start`. If Resend is configured, it is tried first; otherwise the app uses Nodemailer. If no email provider is configured, the admin email log will show the send as skipped.
 
 ## Free Public URL With Cloudflare Quick Tunnel
 

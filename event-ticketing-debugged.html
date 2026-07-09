@@ -1189,6 +1189,7 @@ async function sendTicketEmail(ticket){
    Opens Gmail with the guest and CC pre-filled. The QR code uses the same ticket
    code as the check-status ticket and the Download QR button remains beside it. */
 function manualEmailBody(ticket){
+  const qrUrl = buildQrImageUrl(ticket.id, 220);
   return [
     `Hi ${ticket.name},`,
     '',
@@ -1197,12 +1198,13 @@ function manualEmailBody(ticket){
     EVENT.venueMapLink ? `Directions: ${EVENT.venueMapLink}` : null,
     '',
     `Ticket code: ${ticket.id}`,
+    `Ticket QR: ${qrUrl}`,
     ticket.ticketTotal > 1 ? `(Ticket ${ticket.ticketIndex} of ${ticket.ticketTotal})` : null,
     '',
     'Open the ticket page and check status using this email address:',
     location.origin + location.pathname,
     '',
-    'Show this ticket code at the door. If QR is needed, use the status checker on the ticket page.',
+    'Show this QR or ticket code at the door. The QR above is generated from the same ticket code shown in check status.',
     '',
     rulesPlainText()
   ].filter(line => line !== null).join('\n');

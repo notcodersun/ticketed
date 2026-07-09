@@ -16,6 +16,12 @@ services:
         value: M.U.M Tickets <myth.official.music7@gmail.com>
       - key: SMTP_CC
         value: 42sannay@gmail.com
+      - key: EMAIL_FROM
+        value: M.U.M Tickets <myth.official.music7@gmail.com>
+      - key: EMAIL_CC
+        value: 42sannay@gmail.com
+      - key: RESEND_API_KEY
+        sync: false
     disk:
       name: ticket-data
       mountPath: /var/data
