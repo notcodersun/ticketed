@@ -658,6 +658,14 @@ async function appApi(path, options = {}){
   }
   return data;
 }
+function timeoutSignal(ms){
+  const controller = new AbortController();
+  setTimeout(()=>controller.abort(), ms);
+  return controller.signal;
+}
+async function appApiWithTimeout(path, options = {}, timeoutMs = 12000){
+  return appApi(path, { ...options, signal: timeoutSignal(timeoutMs) });
+}
 async function fetchPublicCapacity(){
   const data = await appApi(`/api/public/capacity?prefix=${encodeURIComponent(TICKET_PREFIX)}`);
   return Number(data.sold || 0);
@@ -1041,23 +1049,16 @@ async function sendMissingApprovedEmails(){
   if(!btn || btn.disabled) return;
   btn.disabled = true; btn.textContent = 'Sending...';
   try{
-    const response = await appApi('/api/admin/send-approved-emails', {
-      method:'POST',
-      body: JSON.stringify({ ticketPrefix: TICKET_PREFIX, onlyMissing: true })
-    });
-    let fallbackCount = 0;
-    for(const attempt of (response.attempts || [])){
-      if(attempt.result && attempt.result.sent) continue;
-      const ticket = await getRecord(TICKET_PREFIX + attempt.ticketId);
-      if(!ticket) continue;
-      const fallback = await sendTicketEmailViaEmailJs(ticket);
-      fallback.backendResult = attempt.result;
-      fallback.provider = fallback.sent ? 'emailjs' : (fallback.provider || 'emailjs');
-      await persistClientEmailLog(ticket, fallback, 'approved-emailjs-fallback');
-      fallbackCount++;
+    await refreshEmailLog();
+    const sentTicketIds = new Set(emailLog.filter(entry => entry.result && entry.result.sent).map(entry => entry.ticket.id));
+    const tickets = (await getAll(TICKET_PREFIX)).filter(ticket => ticket && ticket.id && ticket.email && !sentTicketIds.has(ticket.id));
+    let attempted = 0;
+    for(const ticket of tickets){
+      attempted++;
+      const result = await sendTicketEmail(ticket);
+      await persistClientEmailLog(ticket, result, result.sent && result.provider === 'emailjs' ? 'approved-emailjs' : 'approved-send');
     }
-    const count = response.attempted || 0;
-    btn.textContent = count ? `Attempted ${count}${fallbackCount ? `, EmailJS ${fallbackCount}` : ''}` : 'No missing emails';
+    btn.textContent = attempted ? `Attempted ${attempted}` : 'No missing emails';
     await refreshEmailLog();
   }catch(e){
     btn.textContent = 'Send failed';
@@ -1213,7 +1214,7 @@ function buildQrImageUrl(text, size = 220){
 
 async function sendTicketEmail(ticket){
   try{
-    const result = await appApi('/api/admin/send-ticket-email', {
+    const result = await appApiWithTimeout('/api/admin/send-ticket-email', {
       method: 'POST',
       body: JSON.stringify({ ticketId: ticket.id, ticketPrefix: TICKET_PREFIX })
     });
