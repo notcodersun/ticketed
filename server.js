@@ -28,8 +28,16 @@ loadEnvFile();
 
 const PORT = Number(process.env.PORT || 8000);
 const ROOT = __dirname;
-const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
+function defaultDataDir() {
+  if (process.env.DATA_DIR) return process.env.DATA_DIR;
+  try {
+    if (require('fs').existsSync('/var/data')) return '/var/data';
+  } catch {}
+  return path.join(ROOT, 'data');
+}
+const DATA_DIR = defaultDataDir();
 const DATA_FILE = path.join(DATA_DIR, 'storage.json');
+const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups');
 const EMAIL_LOG_PREFIX = 'email-log:';
 const TEST_EMAIL_LOG_PREFIX = 'test-email-log:';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || process.env.ADMIN_PIN || '2026';
@@ -61,6 +69,7 @@ let mailTransport = null;
 
 async function ensureDataFile() {
   await fs.mkdir(DATA_DIR, { recursive: true });
+  await fs.mkdir(BACKUP_DIR, { recursive: true });
   try {
     await fs.access(DATA_FILE);
   } catch {
@@ -74,9 +83,28 @@ async function readStore() {
   return raw.trim() ? JSON.parse(raw) : {};
 }
 
-function writeStore(store) {
+async function writeBackupSnapshot(store, reason = 'write') {
+  await ensureDataFile();
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const safeReason = String(reason).replace(/[^a-z0-9_-]+/gi, '-').slice(0, 40) || 'write';
+  const file = path.join(BACKUP_DIR, `storage-${stamp}-${safeReason}.json`);
+  await fs.writeFile(file, JSON.stringify({ createdAt: new Date().toISOString(), reason, store }, null, 2) + '\n');
+  return file;
+}
+
+async function pruneBackups(limit = Number(process.env.BACKUP_LIMIT || 120)) {
+  try {
+    const files = (await fs.readdir(BACKUP_DIR)).filter((name) => name.endsWith('.json')).sort();
+    const remove = files.slice(0, Math.max(0, files.length - limit));
+    await Promise.all(remove.map((name) => fs.unlink(path.join(BACKUP_DIR, name)).catch(() => {})));
+  } catch {}
+}
+
+function writeStore(store, reason = 'write') {
   writeQueue = writeQueue.then(async () => {
     await ensureDataFile();
+    await writeBackupSnapshot(store, reason);
+    await pruneBackups();
     const tmp = `${DATA_FILE}.tmp`;
     await fs.writeFile(tmp, JSON.stringify(store, null, 2) + '\n');
     await fs.rename(tmp, DATA_FILE);
@@ -432,6 +460,32 @@ async function handleAdmin(req, res, url) {
     return;
   }
 
+  if (url.pathname === '/api/admin/export-storage' && req.method === 'GET') {
+    if (!isAdmin(req)) {
+      sendError(res, 401, 'Admin session required');
+      return;
+    }
+    const store = await readStore();
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="ticketed-storage-${new Date().toISOString().slice(0,10)}.json"`,
+      'Cache-Control': 'no-store'
+    });
+    res.end(JSON.stringify({ exportedAt: new Date().toISOString(), dataDir: DATA_DIR, store }, null, 2));
+    return;
+  }
+
+  if (url.pathname === '/api/admin/backups' && req.method === 'GET') {
+    if (!isAdmin(req)) {
+      sendError(res, 401, 'Admin session required');
+      return;
+    }
+    await ensureDataFile();
+    const files = (await fs.readdir(BACKUP_DIR)).filter((name) => name.endsWith('.json')).sort().reverse();
+    sendJson(res, 200, { dataDir: DATA_DIR, backupDir: BACKUP_DIR, files });
+    return;
+  }
+
   if (url.pathname === '/api/admin/send-ticket-email' && req.method === 'POST') {
     if (!isAdmin(req)) {
       sendError(res, 401, 'Admin session required');
@@ -456,7 +510,7 @@ async function handleAdmin(req, res, url) {
       return;
     }
     const { result, entry } = await sendAndRecordTicketEmail(store, ticketPrefix, ticket, { source: 'single-ticket' });
-    await writeStore(store);
+    await writeStore(store, url.pathname);
     sendJson(res, 200, { ...result, logEntry: entry });
     return;
   }
@@ -482,7 +536,7 @@ async function handleAdmin(req, res, url) {
       const { result, entry } = await sendAndRecordTicketEmail(store, ticketPrefix, ticket, { source: onlyMissing ? 'approved-missing' : 'approved-resend' });
       attempts.push({ ticketId: ticket.id, email: ticket.email || '', result, logEntry: entry });
     }
-    await writeStore(store);
+    await writeStore(store, url.pathname);
     sendJson(res, 200, { attempted: attempts.length, onlyMissing, attempts });
     return;
   }
@@ -632,7 +686,7 @@ async function handleStorage(req, res, url) {
       return;
     }
     store[key] = valueToStore;
-    await writeStore(store);
+    await writeStore(store, url.pathname);
     sendJson(res, 200, { key, value: valueToStore });
     return;
   }
@@ -644,7 +698,7 @@ async function handleStorage(req, res, url) {
     }
     const store = await readStore();
     delete store[key];
-    await writeStore(store);
+    await writeStore(store, url.pathname);
     res.writeHead(204, { 'Cache-Control': 'no-store' });
     res.end();
     return;
@@ -704,6 +758,8 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Ticketed server running on http://localhost:${PORT}`);
+  console.log(`Ticketed data file: ${DATA_FILE}`);
+  console.log(`Ticketed backup dir: ${BACKUP_DIR}`);
   if (!process.env.ADMIN_PASSWORD && !process.env.ADMIN_PIN) {
     console.warn('WARNING: using default admin password 2026. Set ADMIN_PASSWORD before sharing the public URL.');
   }
