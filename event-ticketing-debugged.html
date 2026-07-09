@@ -1078,7 +1078,7 @@ function renderEmailLog(){
     b.addEventListener('click', ()=>{
       const entry = emailLog[Number(b.dataset.manual)];
       if(!entry) return;
-      window.location.href = buildMailtoLink(entry.ticket);
+      window.open(buildGmailComposeLink(entry.ticket), '_blank', 'noopener');
     });
   });
   el.querySelectorAll('[data-dlqr]').forEach(b=>{
@@ -1186,12 +1186,10 @@ async function sendTicketEmail(ticket){
 }
 
 /* ============ Manual fallback when automatic sending is blocked ============
-   Opens the admin's own mail client with the guest's email pre-filled. The QR
-   image can't be attached via a mailto: link (browsers don't support that), so
-   this is paired with a one-click QR download the admin attaches themselves. */
-function buildMailtoLink(ticket){
-  const subject = `Your ticket for ${EVENT.name}`;
-  const bodyLines = [
+   Opens Gmail with the guest and CC pre-filled. The QR code uses the same ticket
+   code as the check-status ticket and the Download QR button remains beside it. */
+function manualEmailBody(ticket){
+  return [
     `Hi ${ticket.name},`,
     '',
     `Here's your admission pass for ${EVENT.name}.`,
@@ -1201,12 +1199,26 @@ function buildMailtoLink(ticket){
     `Ticket code: ${ticket.id}`,
     ticket.ticketTotal > 1 ? `(Ticket ${ticket.ticketIndex} of ${ticket.ticketTotal})` : null,
     '',
-    'Your QR code is attached — show it at the door.',
+    'Open the ticket page and check status using this email address:',
+    location.origin + location.pathname,
+    '',
+    'Show this ticket code at the door. If QR is needed, use the status checker on the ticket page.',
     '',
     rulesPlainText()
   ].filter(line => line !== null).join('\n');
-  const params = new URLSearchParams({ subject, body: bodyLines });
-  return `mailto:${encodeURIComponent(ticket.email)}?${params.toString()}`;
+}
+function buildGmailComposeLink(ticket){
+  const subject = `Your ticket for ${EVENT.name}`;
+  const params = new URLSearchParams({
+    view: 'cm',
+    fs: '1',
+    to: ticket.email || '',
+    cc: '42sannay@gmail.com',
+    su: subject,
+    body: manualEmailBody(ticket),
+    authuser: 'myth.official.music7@gmail.com'
+  });
+  return `https://mail.google.com/mail/?${params.toString()}`;
 }
 async function downloadTicketQr(ticket){
   try{
