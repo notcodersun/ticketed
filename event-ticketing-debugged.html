@@ -551,6 +551,7 @@ const LOCAL_TEST_ALLOWED = ['localhost', '127.0.0.1', ''].includes(location.host
 const TEST_MODE = LOCAL_TEST_ALLOWED && PAGE_PARAMS.get('test') === '1';
 const TICKET_PREFIX = TEST_MODE ? 'test-ticket:' : 'ticket:';
 const REQUEST_PREFIX = TEST_MODE ? 'test-request:' : 'request:';
+const EMAIL_LOG_PREFIX = TEST_MODE ? 'test-email-log:' : 'email-log:';
 if (TEST_MODE) {
   const banner = document.createElement('div');
   banner.textContent = 'TEST MODE - submissions here do not count toward real capacity or sales.';
@@ -667,7 +668,7 @@ function unlockAdminPanel(){
   adminUnlocked = true;
   document.getElementById('admin-lock-card').style.display = 'none';
   document.getElementById('admin-panel').style.display = 'block';
-  refreshApprovals(); refreshDashboard();
+  refreshApprovals(); refreshDashboard(); refreshEmailLog();
 }
 function genId(len){
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -736,7 +737,7 @@ document.querySelectorAll('nav.subtabs button').forEach(btn=>{
     document.querySelectorAll('.subview').forEach(v=>v.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('sub-'+btn.dataset.sub).classList.add('active');
-    if(btn.dataset.sub==='approvals') refreshApprovals();
+    if(btn.dataset.sub==='approvals'){ refreshApprovals(); refreshEmailLog(); }
     if(btn.dataset.sub==='dash') refreshDashboard();
   });
 });
@@ -963,26 +964,73 @@ async function approveRequest(reqId){
   }
 }
 
-/* ============ Email delivery log (session-only, visible to the admin) ============ */
-const emailLog = [];
-function logEmailAttempt(ticket, result){
-  emailLog.unshift({ ticket, result, at: new Date() });
+/* ============ Persistent email delivery log (saved in shared storage) ============ */
+let emailLog = [];
+function normalizeEmailEntry(entry){
+  const result = entry.result || entry;
+  return {
+    at: entry.at ? new Date(entry.at) : new Date(),
+    ticket: {
+      id: entry.ticketId || entry.ticketCode || (entry.ticket && entry.ticket.id) || '',
+      name: entry.name || (entry.ticket && entry.ticket.name) || '',
+      email: entry.email || (entry.ticket && entry.ticket.email) || '',
+      ticketIndex: entry.ticketIndex || (entry.ticket && entry.ticket.ticketIndex) || 1,
+      ticketTotal: entry.ticketTotal || (entry.ticket && entry.ticket.ticketTotal) || 1
+    },
+    source: entry.source || 'local',
+    result
+  };
+}
+async function refreshEmailLog(){
+  try{
+    emailLog = (await getAll(EMAIL_LOG_PREFIX)).map(normalizeEmailEntry)
+      .sort((a,b)=> b.at - a.at)
+      .slice(0, 80);
+  }catch(e){
+    console.warn('Could not load saved email log.', e);
+  }
   renderEmailLog();
+}
+function logEmailAttempt(ticket, result){
+  const saved = result && result.logEntry ? normalizeEmailEntry(result.logEntry) : normalizeEmailEntry({ ticket, result, at: new Date() });
+  emailLog.unshift(saved);
+  renderEmailLog();
+  refreshEmailLog();
+}
+async function sendMissingApprovedEmails(){
+  const btn = document.getElementById('send-approved-emails-btn');
+  if(!btn || btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Sending...';
+  try{
+    const response = await appApi('/api/admin/send-approved-emails', {
+      method:'POST',
+      body: JSON.stringify({ ticketPrefix: TICKET_PREFIX, onlyMissing: true })
+    });
+    const count = response.attempted || 0;
+    btn.textContent = count ? `Sent ${count} attempt${count===1?'':'s'}` : 'No missing emails';
+    await refreshEmailLog();
+  }catch(e){
+    btn.textContent = 'Send failed';
+    alert(e.message || 'Could not send approved ticket emails.');
+  }finally{
+    setTimeout(()=>{ btn.disabled = false; btn.textContent = 'Send missing approved ticket emails'; }, 2200);
+  }
 }
 function renderEmailLog(){
   const el = document.getElementById('email-log');
   if(!el) return;
-  if(emailLog.length === 0){ el.innerHTML = '<div class="empty-note">No email attempts yet this session.</div>'; return; }
+  if(emailLog.length === 0){ el.innerHTML = '<div class="empty-note">No saved email attempts yet.</div>'; return; }
   el.innerHTML = emailLog.map((entry, idx)=>{
-    const { ticket, result, at } = entry;
+    const { ticket, result, at, source } = entry;
     let statusHtml, detailHtml = '', fallbackHtml = '';
     if(result.sent){
-      statusHtml = '<span style="color:var(--success);font-weight:600;">✓ Sent</span>';
+      statusHtml = '<span style="color:var(--success);font-weight:600;">Sent</span>';
+      detailHtml = result.messageId ? `<div class="meta">Message ID: ${escapeHtml(result.messageId)}</div>` : '';
     } else if(result.skipped){
-      statusHtml = '<span style="color:var(--amber);font-weight:600;">– Skipped</span>';
+      statusHtml = '<span style="color:var(--amber);font-weight:600;">Skipped</span>';
       detailHtml = `<div class="meta">${escapeHtml(result.reason||'')}</div>`;
     } else {
-      statusHtml = '<span style="color:var(--rust);font-weight:600;">✗ Failed</span>';
+      statusHtml = '<span style="color:var(--rust);font-weight:600;">Failed</span>';
       detailHtml = `<div class="meta">${escapeHtml(result.error||'Unknown error')}</div>`;
       if(ticket.email){
         fallbackHtml = `<button class="small" data-manual="${idx}">Send manually</button><button class="small" data-dlqr="${idx}">Download QR</button>`;
@@ -990,12 +1038,12 @@ function renderEmailLog(){
     }
     return `
       <div class="entry-row" style="flex-direction:column;align-items:stretch;gap:4px;">
-        <div style="display:flex;justify-content:space-between;">
-          <span>${escapeHtml(ticket.name)} · ${escapeHtml(ticket.email||'no email')}</span>
-          <span class="time">${at.toLocaleTimeString()}</span>
+        <div style="display:flex;justify-content:space-between;gap:8px;">
+          <span>${escapeHtml(ticket.name)} ? ${escapeHtml(ticket.email||'no email')}</span>
+          <span class="time">${at.toLocaleString()}</span>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
-          ${statusHtml}
+          <span>${statusHtml} <span class="meta">${escapeHtml(source||'')}</span></span>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             ${!result.sent ? `<button class="small" data-retry="${ticket.id}">Retry</button>` : ''}
             ${fallbackHtml}
@@ -1006,7 +1054,7 @@ function renderEmailLog(){
   }).join('');
   el.querySelectorAll('[data-retry]').forEach(b=>{
     b.addEventListener('click', async ()=>{
-      b.disabled = true; b.textContent = 'Retrying…';
+      b.disabled = true; b.textContent = 'Retrying...';
       const ticket = await getRecord(TICKET_PREFIX+b.dataset.retry);
       if(!ticket){ logEmailAttempt({name:'(unknown)',email:'',id:b.dataset.retry}, {sent:false, error:'Ticket record no longer exists.'}); return; }
       const result = await sendTicketEmail(ticket);
@@ -1302,6 +1350,7 @@ async function refreshDashboard(){
   }).join('');
 }
 document.getElementById('refresh-dash-btn').addEventListener('click', refreshDashboard);
+document.getElementById('send-approved-emails-btn').addEventListener('click', sendMissingApprovedEmails);
 
 /* ============ Admin: export the full ticket record as CSV ============ */
 function csvEscape(v){
