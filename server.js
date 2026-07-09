@@ -361,6 +361,11 @@ function isTicketKey(key) {
   return /^test-ticket:[A-Z0-9]{20}$/.test(key) || /^ticket:[A-Z0-9]{20}$/.test(key);
 }
 
+function isEmailLogKey(key) {
+  return /^test-email-log:\d{4}-\d{2}-\d{2}T.*:[A-Z0-9]{20}:[a-z0-9]+$/.test(key)
+    || /^email-log:\d{4}-\d{2}-\d{2}T.*:[A-Z0-9]{20}:[a-z0-9]+$/.test(key);
+}
+
 function safePublicRequest(record) {
   if (!record || typeof record !== 'object') return false;
   if (record.status !== 'pending') return false;
@@ -614,7 +619,7 @@ async function handleStorage(req, res, url) {
         return;
       }
       valueToStore = JSON.stringify(cleanPublicRequest(parsed));
-    } else if (!isRequestKey(key) && !isTicketKey(key)) {
+    } else if (!isRequestKey(key) && !isTicketKey(key) && !isEmailLogKey(key)) {
       sendError(res, 400, 'Invalid storage key');
       return;
     }
