@@ -7,7 +7,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=Metal+Mania&amp;display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
   :root{
     --paper:#EDE6D3;
@@ -416,31 +415,6 @@ const formatEmailMoney = (amount) => 'INR ' + Number(amount).toLocaleString('en-
   maximumFractionDigits: 2
 });
 
-/* ============ EmailJS — fill these in from your EmailJS account ============ */
-/* 1. Create a free account at emailjs.com
-   2. Add an Email Service -> copy its Service ID below
-   3. Create an Email Template. In the template settings, set "To Email" to
-      {{to_email}} (or one of the aliases sent below, such as {{email}}).
-      Add these merge fields to the template body as needed:
-      {{to_email}} {{to_name}} {{event_name}} {{event_datetime}}
-      {{venue_name}} {{venue_link}} {{ticket_code}} {{ticket_index}} {{ticket_total}}
-      {{qr_image}} {{rules_text}}
-      — for the QR to show up in the email, put an <img src="{{qr_image}}"> tag
-        directly in the template's HTML source.
-   4. Copy the Template ID and your account's Public Key below. */
-const EMAILJS_CONFIG = {
-  serviceId: "service_t4dy54m",
-  templateId: "template_dzfluia",
-  publicKey: "iEChL57v_RVnw2j2F"
-};
-const emailjsReady = () => window.emailjs
-  && EMAILJS_CONFIG.serviceId !== "YOUR_EMAILJS_SERVICE_ID"
-  && EMAILJS_CONFIG.templateId !== "YOUR_EMAILJS_TEMPLATE_ID"
-  && EMAILJS_CONFIG.publicKey !== "YOUR_EMAILJS_PUBLIC_KEY";
-if (window.emailjs && emailjsReady()) {
-  emailjs.init({ publicKey: EMAILJS_CONFIG.publicKey });
-}
-
 /* Storage adapter.
    When this page is served by server.js, records are shared through /api/storage
    and saved on the hosting machine. If opened as a plain file/static page, it
@@ -657,14 +631,6 @@ async function appApi(path, options = {}){
     throw error;
   }
   return data;
-}
-function timeoutSignal(ms){
-  const controller = new AbortController();
-  setTimeout(()=>controller.abort(), ms);
-  return controller.signal;
-}
-async function appApiWithTimeout(path, options = {}, timeoutMs = 12000){
-  return appApi(path, { ...options, signal: timeoutSignal(timeoutMs) });
 }
 async function fetchPublicCapacity(){
   const data = await appApi(`/api/public/capacity?prefix=${encodeURIComponent(TICKET_PREFIX)}`);
@@ -993,7 +959,7 @@ function normalizeEmailEntry(entry){
 function emailLogStorageKey(ticketId){
   return `${EMAIL_LOG_PREFIX}${new Date().toISOString()}:${ticketId}:${Math.random().toString(16).slice(2,8)}`;
 }
-function emailLogEntryForClient(ticket, result, source = 'client-emailjs'){
+function emailLogEntryForClient(ticket, result, source = 'client-nodemailer'){
   return {
     at: new Date().toISOString(),
     ticketId: ticket.id,
@@ -1007,7 +973,7 @@ function emailLogEntryForClient(ticket, result, source = 'client-emailjs'){
     result: {
       sent: Boolean(result.sent),
       skipped: Boolean(result.skipped),
-      provider: result.provider || (result.sent ? 'emailjs' : null),
+      provider: result.provider || 'nodemailer',
       messageId: result.messageId || null,
       reason: result.reason || null,
       error: result.error || null,
@@ -1017,7 +983,7 @@ function emailLogEntryForClient(ticket, result, source = 'client-emailjs'){
     }
   };
 }
-async function persistClientEmailLog(ticket, result, source = 'client-emailjs'){
+async function persistClientEmailLog(ticket, result, source = 'client-nodemailer'){
   if(result && result.logEntry) return result.logEntry;
   const entry = emailLogEntryForClient(ticket, result, source);
   try{
@@ -1049,20 +1015,16 @@ async function sendMissingApprovedEmails(){
   if(!btn || btn.disabled) return;
   btn.disabled = true; btn.textContent = 'Sending...';
   try{
-    await refreshEmailLog();
-    const sentTicketIds = new Set(emailLog.filter(entry => entry.result && entry.result.sent).map(entry => entry.ticket.id));
-    const tickets = (await getAll(TICKET_PREFIX)).filter(ticket => ticket && ticket.id && ticket.email && !sentTicketIds.has(ticket.id));
-    let attempted = 0;
-    for(const ticket of tickets){
-      attempted++;
-      const result = await sendTicketEmail(ticket);
-      await persistClientEmailLog(ticket, result, result.sent && result.provider === 'emailjs' ? 'approved-emailjs' : 'approved-send');
-    }
-    btn.textContent = attempted ? `Attempted ${attempted}` : 'No missing emails';
+    const response = await appApiWithTimeout('/api/admin/send-approved-emails', {
+      method:'POST',
+      body: JSON.stringify({ ticketPrefix: TICKET_PREFIX, onlyMissing: true })
+    }, 45000);
+    const count = response.attempted || 0;
+    btn.textContent = count ? `Attempted ${count}` : 'No missing emails';
     await refreshEmailLog();
   }catch(e){
     btn.textContent = 'Send failed';
-    alert(e.message || 'Could not send approved ticket emails.');
+    alert(e.message || 'Could not send approved ticket emails through Nodemailer.');
   }finally{
     setTimeout(()=>{ btn.disabled = false; btn.textContent = 'Send missing approved ticket emails'; }, 2200);
   }
@@ -1214,83 +1176,12 @@ function buildQrImageUrl(text, size = 220){
 
 async function sendTicketEmail(ticket){
   try{
-    const result = await appApiWithTimeout('/api/admin/send-ticket-email', {
+    return await appApiWithTimeout('/api/admin/send-ticket-email', {
       method: 'POST',
       body: JSON.stringify({ ticketId: ticket.id, ticketPrefix: TICKET_PREFIX })
-    });
-    if(result.sent) return result;
-    console.warn('Backend email did not send; falling back to EmailJS.', result);
-    const fallback = await sendTicketEmailViaEmailJs(ticket);
-    fallback.backendResult = result;
-    fallback.provider = fallback.sent ? 'emailjs' : (fallback.provider || 'emailjs');
-    return fallback;
+    }, 30000);
   }catch(e){
-    console.warn('Backend email send failed; falling back to EmailJS.', e);
-    const fallback = await sendTicketEmailViaEmailJs(ticket);
-    fallback.backendError = e.message || String(e);
-    fallback.provider = fallback.sent ? 'emailjs' : (fallback.provider || 'emailjs');
-    return fallback;
-  }
-}
-
-/* ============ EmailJS fallback (kept as backup while testing Nodemailer) ============ */
-async function sendTicketEmailViaEmailJs(ticket){
-  if(!emailjsReady()){
-    return { skipped:true, reason:'EmailJS is not configured (check EMAILJS_CONFIG at the top of the script).' };
-  }
-  const recipientEmail = (ticket.email || '').trim();
-  if(!recipientEmail){
-    return { sent:false, error:'This ticket has no email address on file.' };
-  }
-  const { eventDate, doors } = eventDateParts();
-  const ticketIndex = ticket.ticketIndex || 1;
-  const ticketTotal = ticket.ticketTotal || 1;
-  const ticketLabel = `${ticketIndex} of ${ticketTotal}`;
-  const qrImage = buildQrImageUrl(ticket.id, 220);
-  const params = {
-    to_email: recipientEmail,
-    email: recipientEmail,
-    user_email: recipientEmail,
-    recipient_email: recipientEmail,
-    reply_to: recipientEmail,
-    to_name: ticket.name,
-    name: ticket.name,
-    event_name: EVENT.name,
-    event_datetime: EVENT.dateTime,
-    event_date: eventDate,
-    event_doors: doors,
-    venue_name: EVENT.venueName,
-    venue_link: EVENT.venueMapLink || '',
-    ticket_code: ticket.id,
-    ticket_index: ticketIndex,
-    ticket_total: ticketTotal,
-    ticket_label: ticketLabel,
-    ticket_price: formatEmailMoney(EVENT.price),
-    qr_image: qrImage,
-    qr_url: qrImage,
-    rules_text: rulesPlainText()
-  };
-  try{
-    await emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.templateId, params);
-    return { sent:true };
-  }catch(e){
-    // "Failed to fetch" here is a generic browser network error, not something
-    // EmailJS itself returned — when this app is running as a Claude.ai
-    // artifact, outbound fetch() calls to external APIs are blocked by the
-    // page's security sandbox, so EmailJS's request never leaves the browser.
-    // This is a platform restriction of the artifact preview, not a bad
-    // EMAILJS_CONFIG — it will work once the page is hosted outside Claude.ai.
-    const isNetworkBlocked = e instanceof TypeError && /Failed to fetch|NetworkError/i.test(e.message||'');
-    if(isNetworkBlocked){
-      return {
-        sent:false,
-        networkBlocked:true,
-        error:"Blocked by this preview's security sandbox — outbound email requests can't leave the page here. Use \"Send manually\" below, or host this file outside Claude.ai to enable automatic sending."
-      };
-    }
-    // EmailJS typically rejects with { status, text } rather than a normal Error object.
-    const detail = (e && (e.text || e.message)) ? (e.status ? `${e.status}: ${e.text}` : (e.text || e.message)) : JSON.stringify(e);
-    return { sent:false, error: detail };
+    return { sent:false, provider:'nodemailer', error:e.message || 'Nodemailer request failed or timed out.' };
   }
 }
 
