@@ -209,7 +209,12 @@ function smtpConfigured() {
 
 function getMailTransport() {
   if (mailTransport) return mailTransport;
-  mailTransport = nodemailer.createTransport({
+  mailTransport = createMailTransport();
+  return mailTransport;
+}
+
+function createMailTransport(overrides = {}) {
+  return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 587),
     secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
@@ -220,9 +225,21 @@ function getMailTransport() {
     auth: process.env.SMTP_USER ? {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS || ''
-    } : undefined
+    } : undefined,
+    ...overrides
   });
-  return mailTransport;
+}
+
+function shouldRetryGmailSsl(error) {
+  const host = String(process.env.SMTP_HOST || '').toLowerCase();
+  const port = Number(process.env.SMTP_PORT || 587);
+  const message = String(error && error.message ? error.message : error || '').toLowerCase();
+  return host.includes('gmail') && port !== 465 && (
+    message.includes('timeout') ||
+    message.includes('enetunreach') ||
+    message.includes('econnrefused') ||
+    message.includes('etimedout')
+  );
 }
 
 function summarizeEmailResult(result) {
@@ -298,7 +315,7 @@ async function sendTicketEmailWithNodemailer(ticket) {
     };
   }
   const html = await renderEmailHtml(ticket);
-  const info = await getMailTransport().sendMail({
+  const message = {
     from: process.env.SMTP_FROM,
     to: recipientEmail,
     subject: `Your ticket for ${SERVER_EVENT.name}`,
@@ -312,7 +329,15 @@ async function sendTicketEmailWithNodemailer(ticket) {
       '',
       rulesPlainText()
     ].join('\n')
-  });
+  };
+  let info;
+  try {
+    info = await getMailTransport().sendMail(message);
+  } catch (error) {
+    if (!shouldRetryGmailSsl(error)) throw error;
+    const fallback = createMailTransport({ port: 465, secure: true, family: Number(process.env.SMTP_FAMILY || 4) });
+    info = await fallback.sendMail(message);
+  }
   return { sent: true, provider: 'nodemailer', messageId: info.messageId };
 }
 
