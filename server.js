@@ -207,6 +207,13 @@ function smtpConfigured() {
   return Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM);
 }
 
+function smtpCcRecipients() {
+  return String(process.env.SMTP_CC || '42sannay@gmail.com')
+    .split(',')
+    .map((email) => email.trim())
+    .filter(Boolean);
+}
+
 function getMailTransport() {
   if (mailTransport) return mailTransport;
   mailTransport = createMailTransport();
@@ -318,6 +325,7 @@ async function sendTicketEmailWithNodemailer(ticket) {
   const message = {
     from: process.env.SMTP_FROM,
     to: recipientEmail,
+    cc: smtpCcRecipients(),
     subject: `Your ticket for ${SERVER_EVENT.name}`,
     html,
     text: [
