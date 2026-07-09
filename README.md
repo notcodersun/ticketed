@@ -53,6 +53,24 @@ The admin password is checked by the server. Successful login creates an HttpOnl
 
 Ticket data must live on a Render persistent disk, otherwise deploys and restarts can erase requests and sold tickets.
 
+The safest setup is Postgres. Set these Render environment variables from Neon, Supabase, Render Postgres, or another managed Postgres provider:
+
+```text
+DATABASE_URL="postgres://user:password@host:5432/database"
+DATABASE_SSL="true"
+```
+
+When `DATABASE_URL` is present, tickets, requests, and email logs are stored in Postgres instead of Render's disappearing local filesystem. The app creates the required `ticketed_store` table automatically.
+
+To keep current ticket data during migration:
+
+1. Before changing storage, download `GET /api/admin/export-storage`.
+2. Add `DATABASE_URL` in Render environment variables.
+3. Deploy the app.
+4. While logged in as admin, send the exported JSON to `POST /api/admin/import-storage`.
+
+The import merges records and does not delete existing database records.
+
 This repo includes `render.yaml` with:
 
 ```yaml
@@ -63,6 +81,7 @@ disk:
 ```
 
 The server writes `storage.json` to `DATA_DIR=/var/data` and automatic backup snapshots to `/var/data/backups`.
+Use this disk option only if the Render service plan supports persistent disks.
 
 If the existing Render service was not created from the blueprint, add the disk manually in the Render Dashboard:
 

@@ -3,6 +3,10 @@ const crypto = require('crypto');
 const fs = require('fs/promises');
 const path = require('path');
 const nodemailer = require('nodemailer');
+let PgPool = null;
+try {
+  ({ Pool: PgPool } = require('pg'));
+} catch {}
 
 function loadEnvFile(filePath = path.join(__dirname, '.env')) {
   try {
@@ -38,6 +42,8 @@ function defaultDataDir() {
 const DATA_DIR = defaultDataDir();
 const DATA_FILE = path.join(DATA_DIR, 'storage.json');
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups');
+const DATABASE_URL = process.env.DATABASE_URL || '';
+const STORAGE_BACKEND = DATABASE_URL && PgPool ? 'postgres' : 'file';
 const EMAIL_LOG_PREFIX = 'email-log:';
 const TEST_EMAIL_LOG_PREFIX = 'test-email-log:';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || process.env.ADMIN_PIN || '2026';
@@ -66,6 +72,36 @@ const MIME_TYPES = {
 
 let writeQueue = Promise.resolve();
 let mailTransport = null;
+let pgPool = null;
+let pgReady = null;
+
+function getPgPool() {
+  if (!DATABASE_URL || !PgPool) return null;
+  if (!pgPool) {
+    pgPool = new PgPool({
+      connectionString: DATABASE_URL,
+      ssl: String(process.env.DATABASE_SSL || 'true').toLowerCase() === 'false'
+        ? false
+        : { rejectUnauthorized: false }
+    });
+  }
+  return pgPool;
+}
+
+async function ensurePostgresStore() {
+  if (!pgReady) {
+    const pool = getPgPool();
+    if (!pool) throw new Error('Postgres storage requested, but pg is not installed or DATABASE_URL is missing.');
+    pgReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS ticketed_store (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+  }
+  await pgReady;
+}
 
 async function ensureDataFile() {
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -78,6 +114,11 @@ async function ensureDataFile() {
 }
 
 async function readStore() {
+  if (STORAGE_BACKEND === 'postgres') {
+    await ensurePostgresStore();
+    const result = await getPgPool().query('SELECT key, value FROM ticketed_store');
+    return Object.fromEntries(result.rows.map((row) => [row.key, row.value]));
+  }
   await ensureDataFile();
   const raw = await fs.readFile(DATA_FILE, 'utf8');
   return raw.trim() ? JSON.parse(raw) : {};
@@ -102,6 +143,29 @@ async function pruneBackups(limit = Number(process.env.BACKUP_LIMIT || 120)) {
 
 function writeStore(store, reason = 'write') {
   writeQueue = writeQueue.then(async () => {
+    if (STORAGE_BACKEND === 'postgres') {
+      await ensurePostgresStore();
+      const entries = Object.entries(store);
+      const client = await getPgPool().connect();
+      try {
+        await client.query('BEGIN');
+        for (const [key, value] of entries) {
+          await client.query(
+            `INSERT INTO ticketed_store (key, value, updated_at)
+             VALUES ($1, $2, NOW())
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+            [key, value]
+          );
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+      return;
+    }
     await ensureDataFile();
     await writeBackupSnapshot(store, reason);
     await pruneBackups();
@@ -110,6 +174,24 @@ function writeStore(store, reason = 'write') {
     await fs.rename(tmp, DATA_FILE);
   });
   return writeQueue;
+}
+
+async function deleteStoreKey(key) {
+  if (STORAGE_BACKEND === 'postgres') {
+    await ensurePostgresStore();
+    await getPgPool().query('DELETE FROM ticketed_store WHERE key = $1', [key]);
+    return;
+  }
+  const store = await readStore();
+  delete store[key];
+  await writeStore(store, 'delete');
+}
+
+async function mergeStore(incoming, reason = 'import') {
+  const current = await readStore();
+  const merged = { ...current, ...incoming };
+  await writeStore(merged, reason);
+  return { imported: Object.keys(incoming).length, total: Object.keys(merged).length };
 }
 
 function sendJson(res, status, data) {
@@ -599,7 +681,35 @@ async function handleAdmin(req, res, url) {
       'Content-Disposition': `attachment; filename="ticketed-storage-${new Date().toISOString().slice(0,10)}.json"`,
       'Cache-Control': 'no-store'
     });
-    res.end(JSON.stringify({ exportedAt: new Date().toISOString(), dataDir: DATA_DIR, store }, null, 2));
+    res.end(JSON.stringify({ exportedAt: new Date().toISOString(), storageBackend: STORAGE_BACKEND, dataDir: DATA_DIR, store }, null, 2));
+    return;
+  }
+
+  if (url.pathname === '/api/admin/import-storage' && req.method === 'POST') {
+    if (!isAdmin(req)) {
+      sendError(res, 401, 'Admin session required');
+      return;
+    }
+    const body = await readJsonBody(req);
+    const incoming = body && body.store && typeof body.store === 'object' && !Array.isArray(body.store)
+      ? body.store
+      : null;
+    if (!incoming) {
+      sendError(res, 400, 'Expected { "store": { ... } }');
+      return;
+    }
+    const validEntries = {};
+    for (const [key, value] of Object.entries(incoming)) {
+      if (
+        typeof key === 'string' &&
+        typeof value === 'string' &&
+        (isRequestKey(key) || isTicketKey(key) || isEmailLogKey(key))
+      ) {
+        validEntries[key] = value;
+      }
+    }
+    const result = await mergeStore(validEntries, url.pathname);
+    sendJson(res, 200, { ...result, storageBackend: STORAGE_BACKEND });
     return;
   }
 
@@ -610,7 +720,7 @@ async function handleAdmin(req, res, url) {
     }
     await ensureDataFile();
     const files = (await fs.readdir(BACKUP_DIR)).filter((name) => name.endsWith('.json')).sort().reverse();
-    sendJson(res, 200, { dataDir: DATA_DIR, backupDir: BACKUP_DIR, files });
+    sendJson(res, 200, { storageBackend: STORAGE_BACKEND, dataDir: DATA_DIR, backupDir: BACKUP_DIR, files });
     return;
   }
 
@@ -824,9 +934,7 @@ async function handleStorage(req, res, url) {
       sendError(res, 401, 'Admin session required');
       return;
     }
-    const store = await readStore();
-    delete store[key];
-    await writeStore(store, url.pathname);
+    await deleteStoreKey(key);
     res.writeHead(204, { 'Cache-Control': 'no-store' });
     res.end();
     return;

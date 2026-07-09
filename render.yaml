@@ -12,6 +12,10 @@ services:
         value: /var/data
       - key: BACKUP_DIR
         value: /var/data/backups
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SSL
+        value: true
       - key: SMTP_FROM
         value: M.U.M Tickets <myth.official.music7@gmail.com>
       - key: SMTP_CC
