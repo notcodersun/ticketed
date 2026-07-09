@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: mum-tickets
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: DATA_DIR
+        value: /var/data
+      - key: BACKUP_DIR
+        value: /var/data/backups
+      - key: SMTP_FROM
+        value: M.U.M Tickets <myth.official.music7@gmail.com>
+      - key: SMTP_CC
+        value: 42sannay@gmail.com
+    disk:
+      name: ticket-data
+      mountPath: /var/data
+      sizeGB: 1

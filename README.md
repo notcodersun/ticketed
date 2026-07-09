@@ -49,7 +49,30 @@ SESSION_SECRET="another-long-random-string"
 
 The admin password is checked by the server. Successful login creates an HttpOnly session cookie. Guest browsers can submit payment verification requests and check their own status, but raw storage listing, ticket creation, approvals, check-in updates, dashboards, and CSV export require the admin session.
 
-## EmailJS Ticket Template
+## Render Persistent Storage
+
+Ticket data must live on a Render persistent disk, otherwise deploys and restarts can erase requests and sold tickets.
+
+This repo includes `render.yaml` with:
+
+```yaml
+disk:
+  name: ticket-data
+  mountPath: /var/data
+  sizeGB: 1
+```
+
+The server writes `storage.json` to `DATA_DIR=/var/data` and automatic backup snapshots to `/var/data/backups`.
+
+If the existing Render service was not created from the blueprint, add the disk manually in the Render Dashboard:
+
+1. Open the `mum-tickets` service.
+2. Go to **Disks**.
+3. Add a disk with mount path `/var/data`.
+4. Add environment variables `DATA_DIR=/var/data` and `BACKUP_DIR=/var/data/backups`.
+5. Redeploy once.
+
+## Email Ticket Template
 
 The styled EmailJS HTML body is in `emailjs-ticket-template.html`.
 
@@ -74,7 +97,8 @@ SMTP_HOST="smtp.example.com"
 SMTP_PORT="587"
 SMTP_USER="smtp-user"
 SMTP_PASS="smtp-password"
-SMTP_FROM="M.U.M Tickets <tickets@example.com>"
+SMTP_FROM="M.U.M Tickets <myth.official.music7@gmail.com>"
+SMTP_CC="42sannay@gmail.com"
 ```
 
 Put those values in `.env`, then run `npm start`. If `SMTP_HOST` and `SMTP_FROM` are not set, the admin email log will show that Nodemailer is wired but skipped. That is expected for local feasibility testing.
