@@ -353,8 +353,9 @@
         </div>
         <div class="card">
           <h2>Email delivery log</h2>
-          <p class="hint">Shows the result of ticket emails sent this session — useful for spotting why a send failed.</p>
-          <div class="entry-log" id="email-log"><div class="empty-note">No email attempts yet this session.</div></div>
+          <p class="hint">Saved email attempts for issued tickets. Use the button to send tickets that were approved before email delivery was working.</p>
+          <button class="ghost" id="send-approved-emails-btn">Send missing approved ticket emails</button>
+          <div class="entry-log" id="email-log"><div class="empty-note">No saved email attempts yet.</div></div>
         </div>
       </div>
 
